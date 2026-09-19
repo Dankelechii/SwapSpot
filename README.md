@@ -1,7 +1,7 @@
 # SwapSpot
 A UK parking-bay swap app — interactive prototype. List, browse, and swap access to parking bays with other members, with a credits economy, live demand-based pricing, and a Swap Plus tier (currently locked, in beta).
 
-Live demo: https://claude.ai/artifact/VHcFuVYYnFFJmMTa7qcnw4
+Live demo: https://dankelechii.github.io/SwapSpot/ or https://claude.ai/artifact/VHcFuVYYnFFJmMTa7qcnw4
 
 This is a front-end-only prototype: one self-contained HTML file, no backend, no real accounts. Session state (your name, credits, swap history) is saved in your browser's local storage, so it survives a refresh but won't follow you to another device.
 
