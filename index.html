@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SwapSpot — parking, swapped</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --asphalt:#1B1D21;
+    --asphalt-2:#232629;
+    --asphalt-3:#2C3034;
+    --paint:#F6F4EC;
+    --paint-dim:#B9B7AE;
+    --curb:#F0AC3D;
+    --curb-dim:#8A6A2E;
+    --signal:#3E9163;
+    --signal-dim:#2A5C40;
+    --plus:#6C5CFF;
+    --plus-dim:#443B99;
+    --meter:#D6594B;
+    --radius-card:18px;
+    --radius-pill:999px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html, body{ height:100%; }
+  html{ scroll-padding-top:env(safe-area-inset-top, 0px); }
+  body{
+    background:var(--asphalt);
+    font-family:'Inter',sans-serif;
+    color:var(--paint);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+    position:relative;
+    overflow-x:hidden;
+  }
+  @media (max-width:520px){
+    body{ padding:0; }
+  }
+  /* ambient road-marking backdrop */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      repeating-linear-gradient(90deg, transparent 0 64px, rgba(246,244,236,0.05) 64px 68px, transparent 68px 148px),
+      repeating-linear-gradient(0deg, transparent 0 64px, rgba(246,244,236,0.035) 64px 68px, transparent 68px 148px);
+    pointer-events:none;
+    z-index:0;
+  }
+  .stage{ position:relative; z-index:1; width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; }
+
+  /* ---- app shell (real responsive container, not a fake device) ---- */
+  .app{
+    width:100%;
+    max-width:460px;
+    height:min(860px, 100%);
+    background:var(--asphalt-2);
+    border-radius:26px;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(246,244,236,0.04);
+    overflow:hidden;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    padding-top:env(safe-area-inset-top, 0px);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  @media (max-width:520px){
+    .stage{ padding:0; min-height:100vh; min-height:100dvh; }
+    .app{ max-width:100%; height:100vh; height:100dvh; border-radius:0; box-shadow:none; }
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    padding:16px 20px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex:0 0 auto;
+  }
+  .wordmark{
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; letter-spacing:0.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .wordmark .dot{width:8px;height:8px;border-radius:50%;background:var(--curb);}
+  .tier-chip{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:0.06em;
+    padding:5px 10px; border-radius:var(--radius-pill);
+    border:1px solid var(--curb-dim); color:var(--curb); background:rgba(240,172,61,0.08);
+  }
+  .tier-chip.is-plus{ border-color:var(--plus); color:#C9C2FF; background:rgba(108,92,255,0.14); }
+
+  .location-select{
+    margin:0 20px 14px; padding:11px 14px;
+    background:var(--asphalt-3); border-radius:12px;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:13px; color:var(--paint-dim); flex:0 0 auto;
+  }
+  .location-select b{ color:var(--paint); font-weight:600; }
+
+  .section-label{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--paint-dim); padding:2px 20px 10px; flex:0 0 auto;
+  }
+
+  .screen{
+    flex:1 1 auto; overflow-y:auto; overflow-x:hidden;
+    display:none;
+    flex-direction:column;
+    padding-bottom:14px;
+  }
+  .screen.active{ display:flex; }
+  .screen::-webkit-scrollbar{ width:0; }
+
+  /* ---- ticket card (signature element) ---- */
+  .ticket-list{ display:flex; flex-direction:column; gap:14px; padding:0 20px; }
+  .ticket{
+    position:relative;
+    display:flex;
+    background:var(--asphalt-3);
+    border-radius:var(--radius-card);
+    overflow:visible;
+    box-shadow:0 8px 18px -10px rgba(0,0,0,0.5);
+  }
+  .ticket.locked{ opacity:0.55; }
+  .ticket-main{ flex:1; padding:16px 14px 16px 18px; min-width:0; }
+  .ticket-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .bay-number{
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:17px; letter-spacing:0.03em;
+  }
+  .status-dot{
+    width:7px; height:7px; border-radius:50%; background:var(--signal); flex:0 0 auto;
+  }
+  .status-dot.priority{ background:var(--plus); }
+  .status-text{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--signal);
+  }
+  .status-text.priority{ color:#C9C2FF; }
+  .ticket-street{ font-size:14.5px; font-weight:600; margin-bottom:3px; }
+  .ticket-street-link{
+    font-size:14.5px; font-weight:600; margin-bottom:3px; color:var(--paint);
+    background:none; border:none; padding:0; font-family:'Inter',sans-serif; text-align:left;
+    display:inline-flex; align-items:center; gap:5px; cursor:pointer; text-decoration:underline dotted;
+    text-underline-offset:3px; text-decoration-color:rgba(246,244,236,0.4);
+  }
+  .ticket-street-link svg{ width:12px; height:12px; color:var(--paint-dim); flex:0 0 auto; }
+  .bay-photo-frame{ border-radius:14px; overflow:hidden; margin-bottom:14px; border:1px solid rgba(246,244,236,0.1); }
+  .bay-photo-caption{ font-size:11.5px; color:var(--paint-dim); margin-bottom:16px; line-height:1.5; }
+  .bay-photo-caption b{ color:var(--paint); }
+  .ticket-time{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); margin-bottom:8px; }
+  .ticket-swapper{ font-size:12px; color:var(--paint-dim); }
+  .ticket-swapper b{ color:var(--paint); font-weight:600; }
+
+  .ticket-stub{
+    flex:0 0 78px;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    border-left:2px dashed rgba(246,244,236,0.16);
+  }
+  .ticket-stub::before, .ticket-stub::after{
+    content:""; position:absolute; left:-9px; width:18px; height:18px; border-radius:50%;
+    background:var(--asphalt-2);
+  }
+  .ticket-stub::before{ top:-9px; }
+  .ticket-stub::after{ bottom:-9px; }
+  .stub-btn{
+    background:none; border:none; color:var(--paint);
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600; letter-spacing:0.03em;
+    text-transform:uppercase; text-align:center; line-height:1.4; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .stub-btn svg{ width:18px; height:18px; }
+  .stub-btn.locked-stub{ color:var(--paint-dim); cursor:default; }
+
+  /* ---- empty state ---- */
+  .empty-state{
+    margin:20px; padding:28px 20px; border-radius:var(--radius-card);
+    border:2px dashed rgba(246,244,236,0.14);
+    display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px;
+  }
+  .empty-state svg{ width:34px; height:34px; color:var(--paint-dim); }
+  .empty-state h3{ font-family:'Oswald',sans-serif; font-size:16px; font-weight:600; }
+  .empty-state p{ font-size:12.5px; color:var(--paint-dim); line-height:1.5; max-width:230px; }
+
+  /* ---- buttons ---- */
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px;
+    border:none; border-radius:12px; padding:12px 18px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .btn-plus{ background:var(--plus); color:#fff; }
+  .btn-outline{ background:transparent; border:1.5px solid rgba(246,244,236,0.24); color:var(--paint); }
+
+  /* ---- map screen ---- */
+  .map-wrap{ flex:1; position:relative; margin:0 20px 16px; border-radius:20px; overflow:hidden; min-height:520px; }
+  .map-svg{ width:100%; height:100%; display:block; }
+  .map-pin-label{ font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; }
+
+  .map-lock-overlay{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:28px; gap:14px;
+    background:linear-gradient(180deg, rgba(27,29,33,0.35) 0%, rgba(27,29,33,0.9) 70%);
+  }
+  .lock-badge{
+    width:52px; height:52px; border-radius:50%; background:rgba(108,92,255,0.16); border:1.5px solid var(--plus);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .lock-badge svg{ width:22px; height:22px; color:#C9C2FF; }
+  .map-lock-overlay h3{ font-family:'Oswald',sans-serif; font-size:19px; font-weight:600; }
+  .map-lock-overlay p{ font-size:12.5px; color:var(--paint-dim); max-width:250px; line-height:1.55; }
+  .map-price{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--paint-dim); }
+  .map-price b{ color:var(--paint); }
+
+  .pin-popover{
+    position:absolute; left:20px; right:20px; bottom:16px;
+    background:var(--asphalt-3); border-radius:16px; padding:14px 16px;
+    display:none; box-shadow:0 12px 30px -10px rgba(0,0,0,0.6);
+    border:1px solid rgba(246,244,236,0.08);
+  }
+  .pin-popover.show{ display:block; }
+  .pin-popover-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+
+  /* ---- account screen ---- */
+  .plan-toggle-wrap{ padding:4px 20px 18px; }
+  .plan-card{
+    background:var(--asphalt-3); border-radius:var(--radius-card); padding:18px;
+    border:1.5px solid rgba(246,244,236,0.08); margin-bottom:12px;
+  }
+  .plan-card.highlight{ border-color:var(--plus); background:linear-gradient(155deg, rgba(108,92,255,0.14), var(--asphalt-3) 60%); }
+  .plan-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
+  .plan-name{ font-family:'Oswald',sans-serif; font-weight:600; font-size:16px; }
+  .plan-price{ font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--paint-dim); }
+  .plan-price b{ color:var(--paint); font-size:16px; }
+  .plan-feats{ list-style:none; display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .plan-feats li{ font-size:12.5px; color:var(--paint-dim); display:flex; gap:8px; align-items:flex-start; }
+  .plan-feats li svg{ width:14px; height:14px; flex:0 0 auto; margin-top:2px; color:var(--signal); }
+  .plan-card.highlight .plan-feats li svg{ color:#C9C2FF; }
+  .plan-feats li b{ color:var(--paint); font-weight:600; }
+  .plan-card .btn{ width:100%; }
+  .current-badge{ font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--paint-dim); }
+  .beta-badge{
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
+    color:#C9C2FF; background:rgba(108,92,255,0.14); border:1px solid rgba(108,92,255,0.4);
+    padding:3px 8px; border-radius:var(--radius-pill);
+  }
+
+  .profile-row{ display:flex; align-items:center; gap:12px; padding:6px 20px 20px; }
+  .avatar{ width:46px; height:46px; border-radius:50%; background:var(--curb); display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; color:var(--asphalt); font-size:16px; flex:0 0 auto; }
+  .profile-name{ font-weight:600; font-size:14.5px; }
+  .profile-sub{ font-size:11.5px; color:var(--paint-dim); }
+
+  /* ---- bottom nav ---- */
+  .bottomnav{
+    flex:0 0 auto; display:flex; border-top:1px solid rgba(246,244,236,0.08);
+    background:var(--asphalt-2); padding:10px 8px 16px;
+  }
+  .navbtn{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; cursor:pointer;
+    color:var(--paint-dim); position:relative;
+  }
+  .navbtn svg{ width:21px; height:21px; }
+  .navbtn span{ font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.03em; text-transform:uppercase; }
+  .navbtn.active{ color:var(--paint); }
+  .navbtn .lockdot{ position:absolute; top:-2px; right:26%; width:6px; height:6px; border-radius:50%; background:var(--plus); }
+
+  /* ---- toast ---- */
+  .toast{
+    position:absolute; left:20px; right:20px; bottom:96px; z-index:80;
+    background:var(--paint); color:var(--asphalt); font-size:12.5px; font-weight:600;
+    padding:12px 16px; border-radius:12px; text-align:center;
+    opacity:0; transform:translateY(8px); transition:all 0.25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+
+  /* ---- onboarding ---- */
+  #appShell{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  #onboarding{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .ob-progress{ display:flex; gap:6px; padding:14px 20px 4px; }
+  .ob-dot{ flex:1; height:3px; border-radius:2px; background:rgba(246,244,236,0.14); }
+  .ob-dot.done{ background:var(--curb); }
+  .ob-body{ flex:1; min-height:0; overflow-y:auto; padding:18px 22px 10px; display:flex; flex-direction:column; }
+  .ob-body::-webkit-scrollbar{ width:0; }
+  .ob-eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--curb); margin-bottom:8px; }
+  .ob-title{ font-family:'Oswald',sans-serif; font-weight:600; font-size:23px; margin-bottom:8px; line-height:1.2; }
+  .ob-sub{ font-size:13px; color:var(--paint-dim); line-height:1.55; margin-bottom:22px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:11.5px; color:var(--paint-dim); margin-bottom:6px; font-weight:600; }
+  .field input[type=text], .field input[type=email]{
+    width:100%; background:var(--asphalt-3); border:1.5px solid rgba(246,244,236,0.1); border-radius:10px;
+    padding:12px 13px; color:var(--paint); font-family:'Inter',sans-serif; font-size:14px;
+  }
+  .field input:focus{ outline:none; border-color:var(--curb); }
+  .ob-footer{ flex:0 0 auto; padding:14px 22px 22px; display:flex; flex-direction:column; gap:10px; }
+  .ob-skip{ background:none; border:none; color:var(--paint-dim); font-size:12px; text-align:center; cursor:pointer; text-decoration:underline; }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-block{ width:100%; }
+
+  .avatar-upload-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; margin:12px 0 6px; }
+  .avatar-big{
+    width:104px; height:104px; border-radius:50%; background:var(--curb); position:relative;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:32px; color:var(--asphalt);
+  }
+  .avatar-big img{ width:100%; height:100%; object-fit:cover; }
+  .avatar-cam{
+    position:absolute; bottom:0; right:0; width:32px; height:32px; border-radius:50%;
+    background:var(--plus); border:3px solid var(--asphalt-2); display:flex; align-items:center; justify-content:center;
+  }
+  .avatar-cam svg{ width:15px; height:15px; color:#fff; }
+  .avatar-hint{ font-size:12px; color:var(--paint-dim); }
+
+  .dropzone{
+    border:1.5px dashed rgba(246,244,236,0.22); border-radius:14px; padding:22px 16px;
+    display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;
+    background:var(--asphalt-3); cursor:pointer;
+  }
+  .dropzone svg{ width:26px; height:26px; color:var(--paint-dim); }
+  .dropzone-title{ font-size:13px; font-weight:600; }
+  .dropzone-sub{ font-size:11.5px; color:var(--paint-dim); }
+  .file-chip{
+    display:flex; align-items:center; gap:10px; background:var(--asphalt-3); border-radius:12px; padding:10px 12px;
+    border:1px solid rgba(246,244,236,0.1);
+  }
+  .file-chip .thumb{ width:38px; height:38px; border-radius:8px; object-fit:cover; background:var(--asphalt); flex:0 0 auto; }
+  .file-chip .thumb.doc{ display:flex; align-items:center; justify-content:center; }
+  .file-chip .thumb.doc svg{ width:18px; height:18px; color:var(--paint-dim); }
+  .file-chip .fname{ font-size:12.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-chip .fremove{ background:none; border:none; color:var(--paint-dim); cursor:pointer; font-size:16px; line-height:1; }
+
+  .verify-status{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:12px; margin-top:12px; }
+  .verify-status.pending{ background:rgba(240,172,61,0.1); border:1px solid var(--curb-dim); }
+  .verify-status.verified{ background:rgba(62,145,99,0.12); border:1px solid var(--signal-dim); }
+  .verify-status svg{ width:18px; height:18px; flex:0 0 auto; }
+  .verify-status.pending svg{ color:var(--curb); }
+  .verify-status.verified svg{ color:var(--signal); }
+  .verify-status .vs-title{ font-size:13px; font-weight:600; }
+  .verify-status .vs-sub{ font-size:11.5px; color:var(--paint-dim); }
+  .demo-note{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--paint-dim);
+    border-top:1px dashed rgba(246,244,236,0.14); padding-top:10px; margin-top:12px; line-height:1.5;
+  }
+
+  .verified-badge{ display:inline-flex; align-items:center; gap:3px; color:var(--signal); }
+  .verified-badge svg{ width:12px; height:12px; }
+
+  .tc-box{
+    background:var(--asphalt-3); border-radius:14px; padding:16px; flex:1; overflow-y:auto;
+    font-size:12px; line-height:1.6; color:var(--paint-dim); border:1px solid rgba(246,244,236,0.08);
+    min-height:0;
+  }
+  .tc-box h4{ font-family:'Oswald',sans-serif; color:var(--paint); font-size:13.5px; margin:14px 0 5px; }
+  .tc-box h4:first-child{ margin-top:0; }
+  .tc-box p{ margin-bottom:8px; }
+  .tc-box .tc-flag{ color:var(--curb); font-weight:600; }
+  .tc-disclaimer{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--paint-dim); background:var(--asphalt);
+    padding:9px 11px; border-radius:8px; margin-bottom:12px; line-height:1.5;
+  }
+  .tc-agree{ display:flex; align-items:flex-start; gap:10px; padding:14px 0 4px; }
+  .tc-agree input{ width:18px; height:18px; margin-top:1px; accent-color:var(--curb); flex:0 0 auto; }
+  .tc-agree label{ font-size:12px; color:var(--paint-dim); line-height:1.5; }
+  .tc-scroll-hint{ font-size:11px; color:var(--curb); text-align:center; padding-top:6px; }
+
+  .modal-overlay{
+    position:absolute; inset:0; background:rgba(14,15,17,0.72); z-index:70;
+    display:none; align-items:flex-end; justify-content:center; padding:0;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-sheet{
+    background:var(--asphalt-2); width:100%; max-height:88%; border-radius:22px 22px 0 0;
+    display:flex; flex-direction:column; padding:20px 22px 22px;
+  }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex:0 0 auto; }
+  .modal-head h3{ font-family:'Oswald',sans-serif; font-size:17px; font-weight:600; }
+  .modal-close{ background:var(--asphalt-3); border:none; color:var(--paint); width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:15px; }
+
+  .verify-block-inline{ margin-top:6px; }
+
+  /* ---- splash / start screen ---- */
+  #splash{
+    flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:40px 32px 44px; text-align:center;
+    background:radial-gradient(circle at 50% 34%, var(--asphalt-3) 0%, var(--asphalt) 68%);
+  }
+  .splash-logo{ filter:drop-shadow(0 14px 26px rgba(240,172,61,0.22)); margin-bottom:26px; }
+  .logo-s-spin{
+    transform-origin: 100px 90px;
+    animation: logoSpinOnce 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+  @keyframes logoSpinOnce{
+    from{ transform: rotate(0deg); }
+    to{ transform: rotate(360deg); }
+  }
+  .splash-word{ font-family:'Oswald',sans-serif; font-weight:700; font-size:32px; letter-spacing:0.005em; margin-bottom:10px; }
+  .splash-word .w1{ color:var(--paint); }
+  .splash-word .w2{ color:var(--curb); }
+  .splash-tag{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:56px; }
+  .splash-cta{ width:100%; max-width:250px; }
+  .splash-note{ margin-top:16px; font-size:11px; color:var(--paint-dim); max-width:260px; line-height:1.5; }
+
+  /* ---- radius control ---- */
+  .radius-row{ display:flex; gap:8px; padding:0 20px 14px; flex:0 0 auto; overflow-x:auto; }
+  .radius-chip{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600; letter-spacing:0.02em;
+    padding:7px 13px; border-radius:var(--radius-pill); border:1.5px solid rgba(246,244,236,0.16);
+    background:var(--asphalt-3); color:var(--paint-dim); cursor:pointer; flex:0 0 auto; white-space:nowrap;
+  }
+  .radius-chip.active{ background:var(--curb); border-color:var(--curb); color:var(--asphalt); }
+  .radius-chip.on-map{ background:rgba(35,38,41,0.85); backdrop-filter:blur(2px); }
+  .radius-chip.on-map.active{ background:var(--plus); border-color:var(--plus); color:#fff; }
+  .radius-label b{ color:var(--paint); }
+
+  .map-radius-bar{
+    position:absolute; top:12px; left:12px; right:12px; z-index:20;
+    display:flex; gap:8px; overflow-x:auto;
+  }
+  .you-marker circle.pulse{ animation:pulseRing 2.2s ease-out infinite; }
+  @keyframes pulseRing{
+    0%{ r:6; opacity:0.7; } 100%{ r:22; opacity:0; }
+  }
+  .pin-pulse{ animation:pulseRing 1.8s ease-out infinite; }
+
+  /* ---- demand / watchers ---- */
+  .watchers{
+    margin-left:auto; display:flex; align-items:center; gap:4px; flex:0 0 auto;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; color:var(--paint-dim);
+  }
+  .watchers svg{ width:12px; height:12px; }
+  .watchers.hot{ color:var(--meter); }
+
+  .surge-tag{
+    display:inline-flex; align-items:center; gap:4px;
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:700;
+    letter-spacing:0.04em; text-transform:uppercase; color:var(--meter);
+    background:rgba(214,89,75,0.12); border:1px solid rgba(214,89,75,0.35);
+    padding:3px 7px; border-radius:var(--radius-pill); margin-top:7px;
+  }
+  .surge-tag svg{ width:10px; height:10px; }
+
+  /* ---- credits ---- */
+  .credits-chip{
+    display:flex; align-items:center; gap:5px;
+    font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:var(--curb);
+    background:rgba(240,172,61,0.1); border:1px solid var(--curb-dim);
+    padding:5px 9px; border-radius:var(--radius-pill);
+  }
+  .credits-chip svg{ width:13px; height:13px; }
+
+  .credits-card{
+    background:var(--asphalt-3); border-radius:var(--radius-card); padding:18px;
+    margin:0 20px 14px; border:1px solid rgba(246,244,236,0.08);
+  }
+  .credits-balance{ display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
+  .credits-balance .num{ font-family:'Oswald',sans-serif; font-size:34px; font-weight:700; color:var(--curb); }
+  .credits-balance .unit{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); text-transform:uppercase; letter-spacing:0.08em; }
+  .credits-rules{ font-size:11.5px; color:var(--paint-dim); line-height:1.6; margin:8px 0 12px; }
+  .credits-rules b{ color:var(--paint); }
+  .expiry-banner{
+    background:rgba(240,172,61,0.08); border:1px solid var(--curb-dim); border-radius:10px;
+    padding:10px 12px; font-size:11.5px; color:var(--paint-dim); line-height:1.5; margin-bottom:12px;
+  }
+  .expiry-banner b{ color:var(--paint); }
+  .credit-log{ display:flex; flex-direction:column; gap:7px; border-top:1px dashed rgba(246,244,236,0.14); padding-top:10px; }
+  .credit-log-row{ display:flex; justify-content:space-between; font-size:12px; color:var(--paint-dim); }
+  .credit-log-row .amt{ font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--signal); }
+  .credit-log-empty{ font-size:11.5px; color:var(--paint-dim); }
+
+  .sim-link{ color:var(--curb); font-family:'IBM Plex Mono',monospace; font-size:10px; text-decoration:underline; cursor:pointer; }
+
+  /* ---- booking / spend flow ---- */
+  .cost-line{
+    display:flex; align-items:center; gap:5px; margin-top:8px;
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--curb);
+  }
+  .cost-line svg{ width:12px; height:12px; }
+  .cost-line b{ color:inherit; }
+  .cost-line.premium{ color:var(--meter); }
+
+  .duration-select{
+    width:100%; background:var(--asphalt-3); border:1.5px solid rgba(246,244,236,0.14); border-radius:10px;
+    padding:12px 36px 12px 14px; margin-bottom:16px;
+    color:var(--paint); font-family:'Inter',sans-serif; font-size:14px; font-weight:600;
+    appearance:none; -webkit-appearance:none; -moz-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23B9B7AE' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 14px center;
+  }
+  .duration-select:focus{ outline:none; border-color:var(--curb); }
+  .duration-select option{ background:var(--asphalt-3); color:var(--paint); }
+  .cost-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--asphalt); border-radius:12px; padding:12px 14px; margin-bottom:12px;
+  }
+  .cost-amount{ font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; color:var(--curb); }
+  .cost-row .surge-tag{ margin-top:0; }
+  .cost-reason{ font-size:11px; color:var(--paint-dim); margin-top:2px; }
+  .balance-line{ font-size:12px; color:var(--paint-dim); margin-bottom:4px; }
+  .balance-line b{ color:var(--paint); }
+  .balance-line.insufficient{ color:var(--meter); }
+  .balance-line.insufficient b{ color:var(--meter); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="app">
+
+    <!-- SPLASH / START SCREEN -->
+    <div id="splash">
+      <svg class="splash-logo" viewBox="0 0 200 240" width="108" height="130" xmlns="http://www.w3.org/2000/svg">
+        <path d="M100,228 C60,166 24,132 24,90 A76,76 0 1 1 176,90 C176,132 140,166 100,228 Z" fill="var(--curb)"/>
+        <g class="logo-s-spin">
+          <path d="M74.9,49.3 A26,26 0 1 1 118.4,74.4" fill="none" stroke="var(--asphalt)" stroke-width="28" stroke-linecap="round"/>
+          <polygon points="107.1,63.1 104.2,88.5 129.7,85.7" fill="var(--asphalt)"/>
+          <path d="M125.1,130.7 A26,26 0 1 1 81.6,105.6" fill="none" stroke="var(--asphalt)" stroke-width="28" stroke-linecap="round"/>
+          <polygon points="92.9,116.9 95.8,91.5 70.3,94.3" fill="var(--asphalt)"/>
+        </g>
+      </svg>
+      <div class="splash-word"><span class="w1">Swap</span><span class="w2">Spot</span></div>
+      <div class="splash-tag">Parking bays, swapped</div>
+      <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
+      <div class="splash-note">Prototype build — sign-up, verification, and payments aren't connected to anything real yet.</div>
+    </div>
+
+    <!-- ONBOARDING -->
+    <div id="onboarding" style="display:none;">
+      <div class="ob-progress" id="obProgress"></div>
+      <div class="ob-body" id="obBody"></div>
+      <div class="ob-footer" id="obFooter"></div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="appShell" style="display:none;">
+      <div class="topbar">
+        <div class="wordmark"><span class="dot"></span>SwapSpot</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="credits-chip" id="creditsChip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.3 9.3c0-1.2 1.2-2 2.7-2s2.7.7 2.7 1.8-1 1.6-2.7 2c-1.7.4-2.7 1-2.7 2s1.2 1.9 2.7 1.9 2.7-.8 2.7-2"/></svg><span id="creditsAmt">0</span></div>
+          <div class="tier-chip" id="tierChip">Basic</div>
+        </div>
+      </div>
+
+      <!-- HOME -->
+      <div class="screen active" id="screen-home">
+        <div class="location-select">
+          <span>Near <b>Shoreditch, London</b></span>
+          <span>▾</span>
+        </div>
+        <div class="radius-row" id="radiusRow"></div>
+        <div class="section-label" id="homeSectionLabel">Available now</div>
+        <div class="ticket-list" id="listingList"></div>
+      </div>
+
+      <!-- MAP -->
+      <div class="screen" id="screen-map">
+        <div class="section-label">Live map</div>
+        <div class="map-wrap" id="mapWrap"></div>
+      </div>
+
+      <!-- MY SWAPS -->
+      <div class="screen" id="screen-swaps">
+        <div class="section-label">My swaps</div>
+        <div class="ticket-list" id="mySwapsList"></div>
+      </div>
+
+      <!-- ACCOUNT -->
+      <div class="screen" id="screen-account">
+        <div class="profile-row" id="profileRow"></div>
+        <div class="section-label">Credits</div>
+        <div id="creditsCard"></div>
+        <div class="section-label">Your bay verification</div>
+        <div class="verify-block-inline" id="accountVerifyBlock" style="padding:0 20px;"></div>
+        <div class="section-label" style="margin-top:8px;">Membership</div>
+        <div class="plan-toggle-wrap" id="planCards"></div>
+        <div style="padding:0 20px 6px;">
+          <button class="btn btn-outline btn-block" onclick="openTermsModal()">View Terms &amp; Conditions</button>
+        </div>
+      </div>
+
+      <div class="toast" id="toast"></div>
+
+      <div class="bottomnav">
+        <button class="navbtn active" data-screen="home" onclick="navigate('home')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="navbtn" data-screen="map" onclick="navigate('map')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4 3 6.5v14L9 18l6 2.5 6-2.5v-14L15 6.5 9 4Z"/><path d="M9 4v14M15 6.5v14"/></svg>
+          <span>Map</span>
+          <span class="lockdot" id="mapLockDot"></span>
+        </button>
+        <button class="navbtn" data-screen="swaps" onclick="navigate('swaps')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h13l-3-3.5M20 16H7l3 3.5"/></svg>
+          <span>My swaps</span>
+        </button>
+        <button class="navbtn" data-screen="account" onclick="navigate('account')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1-4 4.5-6 7-6s6 2 7 6"/></svg>
+          <span>Account</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TERMS MODAL (read-only, reachable any time from Account) -->
+    <div class="modal-overlay" id="tcModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>Terms &amp; Conditions</h3>
+          <button class="modal-close" onclick="closeTermsModal()">✕</button>
+        </div>
+        <div class="tc-box" id="tcModalBox"></div>
+      </div>
+    </div>
+
+    <!-- BOOKING MODAL (spend flow: duration + cost + submit) -->
+    <div class="modal-overlay" id="bookingModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>Request this bay</h3>
+          <button class="modal-close" onclick="closeBookingModal()">✕</button>
+        </div>
+        <div id="bookingModalBody"></div>
+      </div>
+    </div>
+
+    <!-- BAY PHOTO MODAL -->
+    <div class="modal-overlay" id="bayPhotoModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3 id="bayPhotoTitle">Bay photo</h3>
+          <button class="modal-close" onclick="closeBayPhoto()">✕</button>
+        </div>
+        <div id="bayPhotoBody"></div>
+      </div>
+    </div>
+
+    <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="onAvatarChosen(event)">
+    <input type="file" id="billInput" accept="image/*" style="display:none;" onchange="onBillChosen(event)">
+  </div>
+</div>
+
+<script>
+const ICONS = {
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h13l-3-3.5M20 17H7l3 3.5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>',
+  empty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 3"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5h1.6l1-1.6h7.8l1 1.6h1.6A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z"/><circle cx="12" cy="13" r="3.4"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V5M8 8.5 12 4l4 4.5"/><path d="M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M14 3.5V8h4"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2 4.5 5v6c0 5 3.2 8.5 7.5 11 4.3-2.5 7.5-6 7.5-11V5L12 2Z" opacity="0.16"/><path d="M9.2 12.1 11.2 14l3.6-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1-4.2 4.4-6.4 7-6.4s6 2.2 7 6.4"/></svg>',
+  flame: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2c-1 4.5 3 5.5 3 10a3 3 0 0 1-6 0c0-1 .3-1.8.8-2.4-.4 2 .9 3 .9 3-1.2-4 1.5-5.8.9-10.3-2.6 2-6 5-6 9.3a6.4 6.4 0 0 0 12.8 0c0-5-3-6.5-5.4-9.6Z"/></svg>',
+  coin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.3 9.3c0-1.2 1.2-2 2.7-2s2.7.7 2.7 1.8-1 1.6-2.7 2c-1.7.4-2.7 1-2.7 2s1.2 1.9 2.7 1.9 2.7-.8 2.7-2"/></svg>'
+};
+
+const TERMS_HTML = `
+  <div class="tc-disclaimer">Draft prototype text for demo purposes only — not legal advice. Have a solicitor review and finalise before this goes live. Governed by the laws of England &amp; Wales. Last updated 13 August 2026.</div>
+  <h4>1. About these terms</h4>
+  <p>These terms are a legally binding agreement between you and Swap Technologies Ltd ("Swap", "we", "us"), a company registered in England and Wales, covering your use of the Swap app (the "Service"). Creating an account means you accept them.</p>
+  <h4>2. Eligibility</h4>
+  <p>You must be at least 18, hold a valid UK driving licence or otherwise be entitled to use or authorise use of a parking bay, and give us accurate registration details.</p>
+  <h4>3. Your account</h4>
+  <p>You agree to give true, current, complete information when you register, including your name, a profile photo, and evidence of your right to any bay you list. Keep this up to date — we may suspend or close accounts where information turns out to be false or misleading.</p>
+  <h4>4. Verifying your right to a bay</h4>
+  <p>Before you list a bay, you must submit a clear, recent photo of the empty bay you intend to lend, so other members can see what they're swapping for. A photo shows what the bay looks like — it doesn't on its own prove you have the right to lend it; that's covered by your declaration in section 5. We review submitted photos and can decline or remove a listing at our reasonable discretion, including where a photo looks reused, doesn't match the listed location, or is otherwise misleading. We don't independently check every listing, and we don't warrant that any bay is genuinely available or lawfully held — you swap with other members at your own risk, subject to section 9.</p>
+  <h4 class="tc-flag">5. Your declaration of ownership and truthfulness</h4>
+  <p>By listing, requesting, or accepting a swap, you confirm that: (a) you're the registered permit holder, leaseholder, tenant, or otherwise genuinely entitled to use and to authorise someone else to use the bay for the stated period; (b) everything in your listing is accurate, including that the photo you submit genuinely shows the bay you're listing; and (c) you'll honour any swap you confirm, barring events reasonably beyond your control.</p>
+  <p>Knowingly giving false information about your right to a bay, or submitting a photo that doesn't genuinely show the bay you're listing, to gain a swap or a subscription benefit may amount to a false representation under the Fraud Act 2006, which can carry criminal liability, on top of us closing your account. You agree to cover other members and Swap for reasonably foreseeable losses directly caused by breaching this section — for example, a penalty charge notice, clamping, or towing fee because a bay you listed wasn't genuinely yours to offer.</p>
+  <h4>6. Swap Plus subscription</h4>
+  <p>Swap Plus costs £1.99 a month (inc. VAT where it applies), billed in advance on a recurring basis until you cancel. It gives you the live map of nearby bays and priority queue position on swap requests ahead of Basic members — priority is a queuing benefit only, not a guarantee any particular swap goes through. Cancel any time; your benefits run to the end of the paid period with no further charge, and no partial refunds outside what the law requires. Swap Plus is currently in beta and not yet available to everyone; this section applies once it launches.</p>
+  <p>Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, new digital subscriptions normally carry a 14-day cancellation right. Because Swap Plus gives you the live map and priority booking straight away, subscribing means you expressly ask for that immediate access and accept that your cancellation right ends once the service starts, per Regulation 37.</p>
+  <h4>7. Acceptable use</h4>
+  <p>Don't use the Service to commit fraud, list a bay you have no right to offer, harass or discriminate against other members, post a photo of a bay that isn't yours to lend, or try to get round our verification checks.</p>
+  <h4>8. Data protection</h4>
+  <p>We handle your personal data — including your profile photo and bay verification photos — under UK GDPR and the Data Protection Act 2018. Verification photos are used only to confirm what a listed bay looks like, kept only as long as reasonably needed for that and for fraud-prevention record-keeping, then securely deleted. You can ask to access, correct, or erase your data, subject to our legitimate retention needs (e.g. evidence in an active dispute) — see the Privacy Policy for full detail.</p>
+  <h4>9. Liability</h4>
+  <p>We provide the Service with reasonable care and skill, in line with the Consumer Rights Act 2015. Swap is a platform that helps members arrange swaps directly with each other — we're not a party to, and don't guarantee, any swap arrangement. To the extent the law allows, we're not liable for losses from another member's bay not genuinely being available, or for parking charges, penalty notices, clamping, towing, or vehicle damage arising from a swap. Nothing here limits liability for death, personal injury caused by negligence, or fraud, which English law doesn't let us exclude.</p>
+  <h4>10. Suspension and termination</h4>
+  <p>We can suspend or close your account, with notice where reasonably possible, if you breach these terms — particularly section 5 — or fail verification.</p>
+  <h4>11. Complaints</h4>
+  <p>Unhappy with something? Contact support@swapapp.example first — we aim to resolve complaints within 14 days. UK residents may also be entitled to use an alternative dispute resolution provider.</p>
+  <h4>12. Governing law</h4>
+  <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction — if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
+`;
+
+const listings = [
+  { id:1, bay:'BAY 14A', street:'Shoreditch High St', time:'Today · 09:00–17:00', owner:'Meera R.', mi:0.05, priority:false, offers:2 },
+  { id:2, bay:'BAY 02C', street:'Old Street', time:'Today · 12:00–14:00', owner:'Tom K.', mi:0.9, priority:true, offers:6 },
+  { id:3, bay:'BAY 21', street:'Hoxton Square', time:'Tomorrow · 08:00–18:00', owner:'Ayesha N.', mi:1.4, priority:false, offers:1 },
+  { id:4, bay:'BAY 07B', street:'Curtain Road', time:'Today · 18:00–22:00', owner:'Priya S.', mi:0.5, priority:false, offers:3 },
+  { id:5, bay:'BAY 30', street:'Redchurch Street', time:'Fri · 07:00–19:00', owner:'Owen D.', mi:2.6, priority:true, offers:5 },
+  { id:6, bay:'BAY 11', street:'Columbia Road', time:'Sat · 09:00–13:00', owner:'Layla F.', mi:3.8, priority:false, offers:4 },
+];
+
+const RADIUS_OPTIONS = [0.5, 1, 2, 5];
+const HOT_THRESHOLD = 5;
+const CREDITS_NORMAL = 5;
+const CREDITS_SURGE = 10;
+const PLUS_MONTHLY_CREDITS = 5;
+const PLUS_FIRST_CREDITS = 10;
+const BILLING_CYCLE_DAYS = 30;
+const NEAR_METRES = 100;
+const COST_PREMIUM = 10;
+const COST_STANDARD = 5;
+const DURATION_OPTIONS = Array.from({length:12}, (_,i) => `${i+1} hour${i+1>1?'s':''}`);
+
+let state = { screen:'home', isPlus:false, mySwaps:[], radius:1 };
+let user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
+let obStep = 1;
+const OB_TOTAL = 4;
+let swapKeyCounter = 1;
+let bookingDraft = null;
+
+function isHot(l){ return l.offers >= HOT_THRESHOLD; }
+function creditsFor(l){ return isHot(l) ? CREDITS_SURGE : CREDITS_NORMAL; }
+function metresFor(l){ return Math.round(l.mi * 1609.34); }
+function isNear(l){ return metresFor(l) <= NEAR_METRES; }
+function bookingCost(l){ return (isNear(l) || isHot(l)) ? COST_PREMIUM : COST_STANDARD; }
+function costReason(l){
+  const near = isNear(l), hot = isHot(l);
+  if(near && hot) return `Within ${NEAR_METRES}m of your search, and ${HOT_THRESHOLD}+ members have offered on it`;
+  if(near) return `Within ${NEAR_METRES}m of your search`;
+  if(hot) return `Surge — ${HOT_THRESHOLD}+ members have offered on this bay`;
+  return `Further than ${NEAR_METRES}m and under ${HOT_THRESHOLD} offers`;
+}
+
+function ticketCard(l, opts={}){
+  const locked = l.priority && !state.isPlus;
+  const hot = isHot(l);
+  const near = isNear(l);
+  const cost = bookingCost(l);
+  const premium = near || hot;
+  return `
+  <div class="ticket ${locked?'locked':''}">
+    <div class="ticket-main">
+      <div class="ticket-row">
+        <span class="bay-number">${l.bay}</span>
+        <span class="status-dot ${l.priority?'priority':''}"></span>
+        <span class="status-text ${l.priority?'priority':''}">${l.priority ? 'Plus priority' : 'Available'}</span>
+        <span class="watchers ${hot?'hot':''}" id="watch-${l.id}">${hot?ICONS.flame:ICONS.person}<span>${l.offers}</span></span>
+      </div>
+      <button class="ticket-street-link" onclick="openBayPhoto(${l.id})">${l.street}${ICONS.camera}</button>
+      <div class="ticket-time">${l.time} · ${l.mi} mi away</div>
+      <div class="ticket-swapper">Swap with <b>${l.owner}</b> <span class="verified-badge">${ICONS.shield}Verified</span></div>
+      <div class="cost-line ${premium?'premium':''}" id="cost-${l.id}">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
+    </div>
+    <div class="ticket-stub">
+      ${locked
+        ? `<div class="stub-btn locked-stub">${ICONS.lock}Plus only</div>`
+        : `<button class="stub-btn" onclick="openBookingModal(${l.id})">${ICONS.swap}Request</button>`
+      }
+    </div>
+  </div>`;
+}
+
+function radiusChipsHTML(onMap){
+  return RADIUS_OPTIONS.map(r => `
+    <button class="radius-chip ${onMap?'on-map':''} ${state.radius===r?'active':''}" onclick="setRadius(${r})">${r < 1 ? r*1000+' m' : r+' mi'}</button>
+  `).join('');
+}
+
+function setRadius(r){
+  state.radius = r;
+  renderHome();
+  if(state.screen === 'map') renderMap();
+}
+
+function renderHome(){
+  document.getElementById('radiusRow').innerHTML = radiusChipsHTML(false);
+  const inRange = listings.filter(l => l.mi <= state.radius);
+  document.getElementById('homeSectionLabel').innerHTML = `Available within <b style="color:var(--paint);">${state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi'}</b>`;
+  const listEl = document.getElementById('listingList');
+  if(inRange.length === 0){
+    listEl.innerHTML = `
+      <div class="empty-state">
+        ${ICONS.empty}
+        <h3>Nothing this close</h3>
+        <p>No bays within ${state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi'} of Shoreditch right now — try a wider radius.</p>
+      </div>`;
+    return;
+  }
+  listEl.innerHTML = inRange.map(l => ticketCard(l)).join('');
+}
+
+function renderSwaps(){
+  if(state.mySwaps.length === 0){
+    document.getElementById('screen-swaps').innerHTML = `
+      <div class="section-label">My swaps</div>
+      <div class="empty-state">
+        ${ICONS.empty}
+        <h3>No swaps yet</h3>
+        <p>Request a bay from Home and it'll show up here with its status.</p>
+        <button class="btn btn-outline" onclick="navigate('home')" style="margin-top:6px;">Browse bays</button>
+      </div>`;
+    saveState();
+    return;
+  }
+  document.getElementById('screen-swaps').innerHTML = `
+    <div class="section-label">My swaps</div>
+    <div class="ticket-list" id="mySwapsList">
+      ${state.mySwaps.map(s => {
+        const declined = s.status === 'Declined';
+        const color = declined ? 'var(--meter)' : (s.creditsSettled ? 'var(--signal)' : 'var(--curb)');
+        let footer;
+        if(!s.creditsSettled){
+          footer = `<div class="demo-note">Prototype only — the real owner would decide this.
+            <span class="sim-link" onclick="ownerApprove(${s.key})">Simulate: owner approves</span> ·
+            <span class="sim-link" onclick="ownerDecline(${s.key})">Simulate: owner declines</span>
+          </div>`;
+        } else if(declined){
+          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.lock} Owner declined — no credits were charged.</div>`;
+        } else {
+          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> charged · <b style="color:var(--signal);">+${s.earned}</b> earned${s.hot ? ' (surge)' : ''}</div>`;
+        }
+        return `
+        <div class="ticket">
+          <div class="ticket-main">
+            <div class="ticket-row">
+              <span class="bay-number">${s.bay}</span>
+              <span class="status-dot" style="background:${color}"></span>
+              <span class="status-text" style="color:${color}">${s.status}</span>
+            </div>
+            <div class="ticket-street">${s.street}</div>
+            <div class="ticket-time">${s.time} · ${s.duration}</div>
+            <div class="ticket-swapper">Swap with <b>${s.owner}</b></div>
+            <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
+            ${footer}
+          </div>
+          <div class="ticket-stub"><div class="stub-btn locked-stub">${ICONS.check}Sent</div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  saveState();
+}
+
+function openBookingModal(id){
+  const l = listings.find(x => x.id === id);
+  if(!l) return;
+  if(l.priority && !state.isPlus){
+    showToast('This bay is reserved for Swap Plus — coming soon in beta', 5000);
+    return;
+  }
+  bookingDraft = { listingId: id, duration: DURATION_OPTIONS[0] };
+  renderBookingModal();
+  document.getElementById('bookingModal').classList.add('show');
+}
+
+function closeBookingModal(){
+  document.getElementById('bookingModal').classList.remove('show');
+  bookingDraft = null;
+}
+
+function setDuration(d){
+  bookingDraft.duration = d;
+}
+
+function renderBookingModal(){
+  const l = listings.find(x => x.id === bookingDraft.listingId);
+  const cost = bookingCost(l);
+  const premium = isNear(l) || isHot(l);
+  const enough = user.credits >= cost;
+  document.getElementById('bookingModalBody').innerHTML = `
+    <div class="bay-number" style="font-size:16px; margin-bottom:2px;">${l.bay} · ${l.street}</div>
+    <div class="ticket-time" style="margin-bottom:16px;">${l.time}</div>
+
+    <div class="section-label" style="padding:0 0 8px;">How long do you need it <span style="text-transform:none; letter-spacing:0;">(up to 12 hours)</span></div>
+    <select class="duration-select" onchange="setDuration(this.value)">
+      ${DURATION_OPTIONS.map(d => `<option value="${d}" ${bookingDraft.duration===d?'selected':''}>${d}</option>`).join('')}
+    </select>
+
+    <div class="cost-row">
+      <div>
+        <div class="cost-amount">${cost} credits</div>
+        <div class="cost-reason">${costReason(l)}</div>
+      </div>
+      ${premium ? `<span class="surge-tag">${ICONS.flame}Premium</span>` : ''}
+    </div>
+
+    <div class="balance-line ${enough?'':'insufficient'}">You have <b>${user.credits} credits</b>${enough ? '' : ` — need ${cost - user.credits} more`}</div>
+
+    <button class="btn btn-plus btn-block" style="margin-top:12px;" ${enough?'':'disabled'} onclick="submitBooking()">
+      ${state.isPlus ? `Book now — ${cost} credits` : `Send request — ${cost} credits`}
+    </button>
+    <div class="demo-note" style="margin-top:10px;">${state.isPlus ? "Plus gets instant book — the owner has pre-approved priority requests." : "The owner reviews requests and can accept or decline. You're only charged if they approve."}</div>
+  `;
+}
+
+function submitBooking(){
+  const l = listings.find(x => x.id === bookingDraft.listingId);
+  const cost = bookingCost(l);
+  if(user.credits < cost) return;
+  const hot = isHot(l), near = isNear(l);
+  const confirmedNow = state.isPlus;
+  const entry = {
+    ...l, duration: bookingDraft.duration, hot, near, cost, earned: creditsFor(l),
+    status: confirmedNow ? 'Confirmed — instant book' : 'Pending owner review',
+    creditsSettled: false, key: swapKeyCounter++
+  };
+  state.mySwaps.unshift(entry);
+  closeBookingModal();
+  if(confirmedNow) settleSwap(entry, true);
+
+  // your request counts as an offer on this bay — added after locking in this request's own price
+  l.offers = Math.min(9, l.offers + 1);
+  updateOfferBadges();
+
+  showToast(confirmedNow
+    ? `Booked — ${cost} credits charged, ${entry.earned} earned${hot ? ' (surge)' : ''}`
+    : `Request sent — you'll be charged ${cost} credits only if the owner approves`, 5000);
+  navigate('swaps');
+}
+
+function settleSwap(entry, approved){
+  if(entry.creditsSettled) return;
+  if(approved){
+    if(user.credits < entry.cost){
+      entry.status = 'Declined';
+      entry.creditsSettled = true;
+      updateCreditsChip();
+      return;
+    }
+    user.credits -= entry.cost;
+    user.creditLog.unshift({ label: `${entry.bay} booking cost`, amount: -entry.cost });
+    user.credits += entry.earned;
+    user.creditLog.unshift({ label: `${entry.bay} swap earnings${entry.hot ? ' (surge)' : ''}`, amount: entry.earned });
+    entry.status = entry.status.includes('instant') ? entry.status : 'Confirmed';
+  } else {
+    entry.status = 'Declined';
+  }
+  entry.creditsSettled = true;
+  updateCreditsChip();
+  if(document.getElementById('appShell').style.display !== 'none') renderAccount();
+}
+
+function ownerApprove(key){
+  const s = state.mySwaps.find(x => x.key === key);
+  if(!s || s.creditsSettled) return;
+  settleSwap(s, true);
+  showToast(s.status === 'Declined'
+    ? "Not enough credits to complete this booking — it's lapsed"
+    : `Owner approved — ${s.cost} credits charged, ${s.earned} earned${s.hot ? ' (surge)' : ''}`, 5000);
+  renderSwaps();
+}
+
+function ownerDecline(key){
+  const s = state.mySwaps.find(x => x.key === key);
+  if(!s || s.creditsSettled) return;
+  settleSwap(s, false);
+  showToast('Owner declined — no credits were charged', 5000);
+  renderSwaps();
+}
+
+function addCredits(amount, label){
+  user.credits += amount;
+  user.creditLog.unshift({ label, amount });
+  updateCreditsChip();
+  if(document.getElementById('appShell').style.display !== 'none') renderAccount();
+}
+
+function updateCreditsChip(){
+  const el = document.getElementById('creditsAmt');
+  if(el) el.textContent = user.credits;
+  saveState();
+}
+
+/* ---------------- session persistence (real webapp: survive a refresh) ---------------- */
+
+const STORAGE_KEY = 'swapspot_session_v1';
+
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, state, swapKeyCounter, listingsOffers: listings.map(l => l.offers) }));
+  } catch(e){ /* storage unavailable or full — session just won't persist, app still works */ }
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const saved = JSON.parse(raw);
+    if(!saved || !saved.user || !saved.user.name) return false; // require a completed signup to count as a session
+    Object.assign(user, saved.user);
+    Object.assign(state, saved.state || {});
+    if(typeof saved.swapKeyCounter === 'number') swapKeyCounter = saved.swapKeyCounter;
+    if(Array.isArray(saved.listingsOffers)){
+      listings.forEach((l, i) => { if(typeof saved.listingsOffers[i] === 'number') l.offers = saved.listingsOffers[i]; });
+    }
+    return true;
+  } catch(e){ return false; }
+}
+
+/* ---------------- Swap Plus monthly credit allowance ---------------- */
+
+function grantMonthlyCredits(amount = PLUS_MONTHLY_CREDITS){
+  const now = Date.now();
+  const label = amount === PLUS_FIRST_CREDITS ? 'Swap Plus welcome credits' : 'Swap Plus monthly credits';
+  user.plusGrant = { active:true, remaining: amount, amount, expiresAt: now + BILLING_CYCLE_DAYS * 24 * 60 * 60 * 1000 };
+  addCredits(amount, label);
+}
+
+function expireMonthlyCredits(){
+  if(!user.plusGrant.active || user.plusGrant.remaining <= 0) return 0;
+  const lost = user.plusGrant.remaining;
+  user.credits = Math.max(0, user.credits - lost);
+  user.creditLog.unshift({ label: 'Monthly credits expired unused', amount: -lost });
+  user.plusGrant.remaining = 0;
+  user.plusGrant.active = false;
+  updateCreditsChip();
+  return lost;
+}
+
+function simulateNextCycle(){
+  if(!state.isPlus) return;
+  const lost = expireMonthlyCredits();
+  grantMonthlyCredits();
+  showToast(lost > 0
+    ? `Billing cycle renewed — ${lost} unused credit${lost > 1 ? 's' : ''} expired, 5 fresh credits added`
+    : 'Billing cycle renewed — 5 fresh monthly credits added', 5000);
+  renderAccount();
+}
+
+/* ---------------- live demand simulation ---------------- */
+
+function tickOffers(){
+  listings.forEach(l => {
+    const delta = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1 — other members occasionally offering or withdrawing
+    l.offers = Math.min(8, Math.max(1, l.offers + delta));
+  });
+  updateOfferBadges();
+  if(state.screen === 'map' && state.isPlus){
+    const popoverOpen = document.getElementById('pinPopover')?.classList.contains('show');
+    if(!popoverOpen) renderMap();
+  }
+}
+
+function updateOfferBadges(){
+  listings.forEach(l => {
+    const watchEl = document.getElementById('watch-' + l.id);
+    const costEl = document.getElementById('cost-' + l.id);
+    if(!watchEl && !costEl) return;
+    const hot = isHot(l);
+    const near = isNear(l);
+    const premium = near || hot;
+    const cost = bookingCost(l);
+    if(watchEl){
+      watchEl.classList.toggle('hot', hot);
+      watchEl.innerHTML = `${hot ? ICONS.flame : ICONS.person}<span>${l.offers}</span>`;
+    }
+    if(costEl){
+      costEl.classList.toggle('premium', premium);
+      costEl.innerHTML = `${ICONS.coin}<b>${cost} credits</b> to book${near ? ' · within 100m' : (hot ? ' · surge' : '')}`;
+    }
+  });
+  if(bookingDraft && document.getElementById('bookingModal')?.classList.contains('show')) renderBookingModal();
+}
+
+setInterval(tickOffers, 3000);
+
+function renderMap(){
+  const wrap = document.getElementById('mapWrap');
+  const CX = 180, CY = 260, PX_PER_MI = 42, MAX_PX = 250, MIN_PX = 26;
+
+  const pins = listings.map((l, i) => {
+    const angle = (i * (360 / listings.length) - 90) * (Math.PI / 180);
+    const distPx = Math.min(Math.max(l.mi * PX_PER_MI, MIN_PX), MAX_PX);
+    const x = CX + distPx * Math.cos(angle);
+    const y = CY + distPx * Math.sin(angle);
+    const inRange = l.mi <= state.radius;
+    const color = l.priority ? '--plus' : '--signal';
+    const hot = isHot(l);
+    return `
+      <g class="pin" onclick="${inRange ? `showPin(${l.id})` : ''}" style="cursor:${inRange?'pointer':'default'}; opacity:${inRange?1:0.25};">
+        ${hot ? `<circle class="pin-pulse" cx="${x}" cy="${y}" r="6" fill="var(--meter)" opacity="0.6" pointer-events="none"/>` : ''}
+        <circle cx="${x}" cy="${y}" r="14" fill="var(${hot?'--meter':color})" opacity="0.22"/>
+        <circle cx="${x}" cy="${y}" r="6.5" fill="var(${hot?'--meter':color})" stroke="var(--asphalt)" stroke-width="2"/>
+      </g>`;
+  }).join('');
+
+  const radiusPx = Math.min(state.radius * PX_PER_MI, MAX_PX);
+
+  const svg = `
+    <svg class="map-svg" viewBox="0 0 360 520" preserveAspectRatio="xMidYMid slice">
+      <rect width="360" height="520" fill="#2A2E33"/>
+      <g stroke="#383D43" stroke-width="14">
+        <line x1="0" y1="90" x2="360" y2="90"/><line x1="0" y1="230" x2="360" y2="230"/>
+        <line x1="0" y1="370" x2="360" y2="370"/>
+        <line x1="60" y1="0" x2="60" y2="520"/><line x1="200" y1="0" x2="200" y2="520"/>
+        <line x1="300" y1="0" x2="300" y2="520"/>
+      </g>
+      <g stroke="#4A5058" stroke-width="1.5" stroke-dasharray="6 6">
+        <line x1="0" y1="90" x2="360" y2="90"/><line x1="0" y1="230" x2="360" y2="230"/>
+        <line x1="0" y1="370" x2="360" y2="370"/>
+        <line x1="60" y1="0" x2="60" y2="520"/><line x1="200" y1="0" x2="200" y2="520"/>
+        <line x1="300" y1="0" x2="300" y2="520"/>
+      </g>
+      <circle cx="${CX}" cy="${CY}" r="${radiusPx}" fill="var(--plus)" opacity="0.09"/>
+      <circle cx="${CX}" cy="${CY}" r="${radiusPx}" fill="none" stroke="var(--plus)" stroke-width="1.5" stroke-dasharray="5 5"/>
+      ${pins}
+      <g class="you-marker">
+        <circle class="pulse" cx="${CX}" cy="${CY}" r="6" fill="var(--curb)" opacity="0.6" pointer-events="none"/>
+        <circle cx="${CX}" cy="${CY}" r="7" fill="var(--curb)" stroke="var(--asphalt)" stroke-width="2.5"/>
+      </g>
+    </svg>
+    <div class="pin-popover" id="pinPopover"></div>
+  `;
+
+  if(!state.isPlus){
+    wrap.innerHTML = svg + `
+      <div class="map-lock-overlay">
+        <div class="lock-badge">${ICONS.lock}</div>
+        <h3>See every swap near you</h3>
+        <p>The live map is part of Swap Plus, powered by Google Maps and Apple Maps — currently in beta.</p>
+        <button class="btn btn-outline" onclick="subscribe()">Notify me when it launches</button>
+        <span class="map-price">Launching soon — everyone's on Basic for now</span>
+      </div>`;
+    wrap.querySelector('.map-svg').style.filter = 'blur(3px) saturate(0.7)';
+  } else {
+    wrap.innerHTML = `<div class="map-radius-bar">${radiusChipsHTML(true)}</div>` + svg;
+  }
+}
+
+/* ---------------- bay verification photo (illustrated stand-in) ---------------- */
+
+function seededRand(seed){
+  let s = seed % 2147483647;
+  if(s <= 0) s += 2147483646;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+function bayPhotoSVG(l){
+  const rand = seededRand(l.id * 977 + 13);
+  const code = l.bay.replace('BAY ', '');
+  const tones = ['#2A2E33', '#2C3239', '#282D31'];
+  const bg = tones[l.id % tones.length];
+  const speckles = Array.from({length: 10}, () => {
+    const x = 20 + rand()*360, y = 20 + rand()*220, r = 1 + rand()*2, o = 0.05 + rand()*0.1;
+    return `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" fill="#000" opacity="${o.toFixed(2)}"/>`;
+  }).join('');
+
+  const bracketStyle = l.id % 2 === 0;
+  const markings = bracketStyle ? `
+    <rect x="66" y="36" width="268" height="188" rx="3" fill="none" stroke="#F6F4EC" stroke-width="7" opacity="0.92"/>
+    <text x="200" y="150" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="52" fill="#F6F4EC" opacity="0.85">${code}</text>
+  ` : `
+    <path d="M58,50 h46 M58,50 v46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M342,50 h-46 M342,50 v46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M58,210 h46 M58,210 v-46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M342,210 h-46 M342,210 v-46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <text x="200" y="152" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="46" fill="#F6F4EC" opacity="0.8">${code}</text>
+  `;
+
+  return `
+    <svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg" style="width:100%; display:block; background:${bg};">
+      <defs>
+        <radialGradient id="vign-${l.id}" cx="50%" cy="42%" r="75%">
+          <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0.32"/>
+        </radialGradient>
+      </defs>
+      <rect width="400" height="260" fill="${bg}"/>
+      <rect y="0" width="400" height="10" fill="#000" opacity="0.18"/>
+      ${speckles}
+      ${markings}
+      <rect width="400" height="260" fill="url(#vign-${l.id})"/>
+    </svg>`;
+}
+
+function openBayPhoto(id){
+  const l = listings.find(x => x.id === id);
+  if(!l) return;
+  document.getElementById('bayPhotoTitle').textContent = `${l.bay} · ${l.street}`;
+  document.getElementById('bayPhotoBody').innerHTML = `
+    <div class="bay-photo-frame">${bayPhotoSVG(l)}</div>
+    <div class="bay-photo-caption">Uploaded by <b>${l.owner}</b> during verification, showing the empty bay before it's swapped. <span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span></div>
+    <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${l.id});">Request this bay</button>
+  `;
+  document.getElementById('bayPhotoModal').classList.add('show');
+}
+
+function closeBayPhoto(){
+  document.getElementById('bayPhotoModal').classList.remove('show');
+}
+
+function showPin(id){
+  const l = listings.find(x => x.id === id);
+  const pop = document.getElementById('pinPopover');
+  if(!l || !pop) return;
+  const hot = isHot(l);
+  const near = isNear(l);
+  const cost = bookingCost(l);
+  const premium = near || hot;
+  pop.innerHTML = `
+    <div class="pin-popover-top">
+      <button class="ticket-street-link" style="font-size:14px;" onclick="openBayPhoto(${l.id})">${l.bay} · ${l.street}${ICONS.camera}</button>
+      <span class="watchers ${hot?'hot':''}">${hot?ICONS.flame:ICONS.person}<span>${l.offers} offer${l.offers===1?'':'s'}</span></span>
+    </div>
+    <div class="ticket-time" style="margin-bottom:6px;">${l.time} · ${l.mi} mi away</div>
+    <div class="cost-line ${premium?'premium':''}" style="margin:0 0 10px;">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
+    <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${l.id})">Request this bay</button>
+  `;
+  pop.classList.add('show');
+}
+
+/* ---------------- onboarding ---------------- */
+
+function renderOnboarding(){
+  document.getElementById('obProgress').innerHTML =
+    Array.from({length:OB_TOTAL}).map((_,i) => `<div class="ob-dot ${i < obStep ? 'done' : ''}"></div>`).join('');
+
+  const body = document.getElementById('obBody');
+  const footer = document.getElementById('obFooter');
+
+  if(obStep === 1){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Step 1 of ${OB_TOTAL}</div>
+      <div class="ob-title">Create your account</div>
+      <div class="ob-sub">Just enough to get you started — you'll prove your parking spot next.</div>
+      <div class="field"><label>Full name</label><input type="text" id="obName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onObField()"></div>
+      <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="obNext()" disabled>Continue</button>`;
+    onObField();
+  }
+
+  if(obStep === 2){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Step 2 of ${OB_TOTAL}</div>
+      <div class="ob-title">Add a profile photo</div>
+      <div class="ob-sub">Other members see this when they're deciding whether to swap with you.</div>
+      <div class="avatar-upload-wrap">
+        <div class="avatar-big" onclick="triggerAvatarUpload()">
+          ${user.avatar ? `<img src="${user.avatar}">` : (escapeHtml(initials(user.name)) || 'JD')}
+          <div class="avatar-cam">${ICONS.camera}</div>
+        </div>
+        <span class="avatar-hint">${user.avatar ? 'Tap to change photo' : 'Tap the circle to upload a photo'}</span>
+      </div>
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" onclick="obNext()">Continue</button>`;
+  }
+
+  if(obStep === 3){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Step 3 of ${OB_TOTAL}</div>
+      <div class="ob-title">Prove your parking spot</div>
+      <div class="ob-sub">Upload a photo of the empty parking bay you'll be lending. This is what lets other members see exactly what they're swapping for.</div>
+      ${renderVerifyBlock()}
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="obNext()" ${user.verification === 'unverified' ? 'disabled' : ''}>Continue</button>
+      ${user.verification === 'unverified' ? `<button class="ob-skip" onclick="obNext()">I'll do this later</button>` : ''}`;
+  }
+
+  if(obStep === 4){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Step ${OB_TOTAL} of ${OB_TOTAL}</div>
+      <div class="ob-title">Terms &amp; Conditions</div>
+      <div class="ob-sub">Read this through — it covers the promise at the heart of Swap: that the bay you list is genuinely yours to offer.</div>
+      <div class="tc-box" id="tcScrollBox" onscroll="onTcScroll()">${TERMS_HTML}</div>
+      <div class="tc-scroll-hint" id="tcHint">Scroll to the bottom to continue</div>
+      <div class="tc-agree">
+        <input type="checkbox" id="tcCheck" disabled onchange="onObField()">
+        <label for="tcCheck">I confirm the information I've provided — including my proof of address — is true, and I agree to the Terms &amp; Conditions and Privacy Policy.</label>
+      </div>
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="finishOnboarding()" disabled>Agree &amp; create account</button>`;
+    setTimeout(() => {
+      const tbox = document.getElementById('tcScrollBox');
+      if(tbox && tbox.scrollHeight <= tbox.clientHeight + 4){
+        document.getElementById('tcCheck').disabled = false;
+        document.getElementById('tcHint').style.display = 'none';
+      }
+    }, 50);
+  }
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function initials(name){
+  if(!name) return '';
+  return name.trim().split(/\s+/).slice(0,2).map(p => p[0].toUpperCase()).join('');
+}
+
+function onObField(){
+  const btn = document.getElementById('obNextBtn');
+  if(!btn) return;
+  if(obStep === 1){
+    const name = document.getElementById('obName')?.value.trim();
+    const email = document.getElementById('obEmail')?.value.trim();
+    btn.disabled = !(name && email.includes('@'));
+  }
+  if(obStep === 4){
+    btn.disabled = !document.getElementById('tcCheck')?.checked;
+  }
+}
+
+function onTcScroll(){
+  const box = document.getElementById('tcScrollBox');
+  const check = document.getElementById('tcCheck');
+  const hint = document.getElementById('tcHint');
+  if(box.scrollTop + box.clientHeight >= box.scrollHeight - 12){
+    check.disabled = false;
+    hint.style.display = 'none';
+  }
+}
+
+function obNext(){
+  if(obStep === 1){
+    user.name = document.getElementById('obName').value.trim();
+    user.email = document.getElementById('obEmail').value.trim();
+  }
+  obStep = Math.min(obStep + 1, OB_TOTAL);
+  renderOnboarding();
+  document.getElementById('obBody').scrollTop = 0;
+}
+
+function finishOnboarding(){
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  user.credits = 5;
+  user.creditLog = [{ label: 'Sign-up bonus', amount: 5 }];
+  showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'} — 5 free credits are in your account`, 5000);
+  refreshAll();
+}
+
+/* ---------------- avatar + verification uploads ---------------- */
+
+function triggerAvatarUpload(){ document.getElementById('avatarInput').click(); }
+function onAvatarChosen(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    user.avatar = ev.target.result;
+    if(obStep === 2) renderOnboarding();
+    if(document.getElementById('appShell').style.display !== 'none') renderAccount();
+  };
+  reader.readAsDataURL(file);
+}
+
+function triggerBillUpload(){ document.getElementById('billInput').click(); }
+function onBillChosen(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const isImage = file.type.startsWith('image/');
+  const finish = (dataUrl) => {
+    user.bill = { name:file.name, dataUrl: isImage ? dataUrl : null, isPdf: !isImage };
+    user.verification = 'pending';
+    rerenderVerifyContext();
+  };
+  if(isImage){
+    const reader = new FileReader();
+    reader.onload = ev => finish(ev.target.result);
+    reader.readAsDataURL(file);
+  } else {
+    finish(null);
+  }
+}
+
+function removeBill(){
+  user.bill = null;
+  user.verification = 'unverified';
+  rerenderVerifyContext();
+}
+
+function simulateApproval(){
+  user.verification = 'verified';
+  showToast('Bay photo verified — your listings now show a verified badge');
+  rerenderVerifyContext();
+}
+
+function rerenderVerifyContext(){
+  if(obStep === 3 && document.getElementById('onboarding').style.display !== 'none') renderOnboarding();
+  const accBlock = document.getElementById('accountVerifyBlock');
+  if(accBlock) accBlock.innerHTML = renderVerifyBlock();
+}
+
+function renderVerifyBlock(){
+  if(user.verification === 'unverified'){
+    return `
+      <div class="dropzone" onclick="triggerBillUpload()">
+        ${ICONS.upload}
+        <div class="dropzone-title">Upload a photo of your bay</div>
+        <div class="dropzone-sub">A clear photo of the empty bay, taken recently</div>
+      </div>`;
+  }
+  const fileRow = user.bill ? `
+    <div class="file-chip">
+      ${user.bill.dataUrl ? `<img class="thumb" src="${user.bill.dataUrl}">` : `<div class="thumb doc">${ICONS.doc}</div>`}
+      <span class="fname">${user.bill.name}</span>
+      <button class="fremove" onclick="removeBill()">✕</button>
+    </div>` : '';
+
+  if(user.verification === 'pending'){
+    return `
+      ${fileRow}
+      <div class="verify-status pending">
+        ${ICONS.doc}
+        <div><div class="vs-title">Pending review</div><div class="vs-sub">Usually reviewed within 24 hours</div></div>
+      </div>
+      <div class="demo-note">Prototype only — real review happens on our end. <a href="#" style="color:var(--curb);" onclick="event.preventDefault();simulateApproval()">Simulate approval</a> to preview the verified state.</div>`;
+  }
+  return `
+    ${fileRow}
+    <div class="verify-status verified">
+      ${ICONS.shield}
+      <div><div class="vs-title">Bay verified</div><div class="vs-sub">Your listings show a verified badge to other members</div></div>
+    </div>`;
+}
+
+/* ---------------- terms modal ---------------- */
+
+function openTermsModal(){
+  document.getElementById('tcModalBox').innerHTML = TERMS_HTML;
+  document.getElementById('tcModal').classList.add('show');
+}
+function closeTermsModal(){
+  document.getElementById('tcModal').classList.remove('show');
+}
+
+function renderAccount(){
+  const av = user.avatar
+    ? `<img src="${user.avatar}">`
+    : (escapeHtml(initials(user.name)) || 'JD');
+  document.getElementById('profileRow').innerHTML = `
+    <div class="avatar-big" style="width:46px;height:46px;font-size:15px;cursor:pointer;" onclick="triggerAvatarUpload()">
+      ${av}
+      <div class="avatar-cam" style="width:18px;height:18px;border-width:2px;">${ICONS.camera}</div>
+    </div>
+    <div>
+      <div class="profile-name">${escapeHtml(user.name || 'Jordan Diallo')}</div>
+      <div class="profile-sub">${state.isPlus ? 'Swap Plus member' : 'Basic member'}</div>
+    </div>`;
+  document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
+
+  const grant = user.plusGrant;
+  const daysLeft = grant.active ? Math.max(0, Math.ceil((grant.expiresAt - Date.now()) / (24*60*60*1000))) : 0;
+  const expiryDate = grant.active ? new Date(grant.expiresAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '';
+
+  document.getElementById('creditsCard').innerHTML = `
+    <div class="credits-card">
+      <div class="credits-balance"><span class="num">${user.credits}</span><span class="unit">credits</span></div>
+      <div class="credits-rules">Booking a bay costs <b>${COST_STANDARD} credits</b> normally, or <b>${COST_PREMIUM} credits</b> if it's within ${NEAR_METRES}m of your search or if <b>${HOT_THRESHOLD} or more members</b> have made offers on it. You're only charged once the owner approves. When one of your own swaps is confirmed you earn <b>${CREDITS_NORMAL} credits</b> back — <b>${CREDITS_SURGE}</b> if it was surging.${!state.isPlus ? ` Swap Plus is in beta — when it launches, subscribers will get <b>${PLUS_FIRST_CREDITS} welcome credits</b>, then <b>${PLUS_MONTHLY_CREDITS} credits</b> every billing cycle after that.` : ''}</div>
+      ${state.isPlus && grant.active && grant.remaining > 0 ? `
+        <div class="expiry-banner">
+          ⏳ <b>${grant.remaining} Swap Plus credit${grant.remaining>1?'s':''}</b> expire on <b>${expiryDate}</b> (${daysLeft} day${daysLeft!==1?'s':''} left) if unused this billing cycle.
+          <div style="margin-top:6px;"><span class="sim-link" onclick="simulateNextCycle()">Simulate next billing cycle</span></div>
+        </div>` : ''
+      }
+      <div class="credit-log">
+        ${user.creditLog.length === 0
+          ? `<span class="credit-log-empty">No activity yet — swap a bay to start earning.</span>`
+          : user.creditLog.slice(0,5).map(c => `<div class="credit-log-row"><span>${c.label}</span><span class="amt" style="color:${c.amount<0?'var(--meter)':'var(--signal)'};">${c.amount>=0?'+':''}${c.amount}</span></div>`).join('')
+        }
+      </div>
+    </div>`;
+
+  document.getElementById('planCards').innerHTML = `
+    <div class="plan-card">
+      <div class="plan-head">
+        <span class="plan-name">Basic</span>
+        <span class="current-badge">Current plan</span>
+      </div>
+      <ul class="plan-feats">
+        <li>${ICONS.check}<span>Post and browse <b>nearby swap requests</b></span></li>
+        <li>${ICONS.check}<span>Message swap partners directly</span></li>
+        <li>${ICONS.check}<span>Standard queue position for bookings</span></li>
+      </ul>
+      <div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">Swap is free to use right now — everyone's on Basic while Swap Plus is in beta.</div>
+    </div>
+    <div class="plan-card highlight">
+      <div class="plan-head">
+        <span class="plan-name">Swap Plus</span>
+        ${state.isPlus ? '<span class="current-badge">Current plan</span>' : '<span class="beta-badge">Beta · Coming soon</span>'}
+      </div>
+      <ul class="plan-feats">
+        <li>${ICONS.check}<span><b>Live map</b> of every nearby bay, powered by Google Maps and Apple Maps</span></li>
+        <li>${ICONS.check}<span><b>Priority booking</b> — first in line on every swap</span></li>
+        <li>${ICONS.check}<span>Access to Plus-only bays before anyone else</span></li>
+      </ul>
+      ${state.isPlus
+        ? `<button class="btn btn-outline" onclick="unsubscribe()">Cancel Swap Plus</button>`
+        : `<button class="btn btn-outline" onclick="subscribe()">Notify me when it launches</button>`
+      }
+    </div>
+  `;
+  saveState();
+}
+
+const PLUS_ENABLED = false; // Swap Plus is in beta — flip to true at launch
+
+function activatePlus(){
+  state.isPlus = true;
+  const firstTime = !user.everSubscribed;
+  const amount = firstTime ? PLUS_FIRST_CREDITS : PLUS_MONTHLY_CREDITS;
+  grantMonthlyCredits(amount);
+  user.everSubscribed = true;
+  showToast(`Welcome to Swap Plus — the live map, priority booking, and ${amount} ${firstTime ? 'welcome' : 'monthly'} credits are unlocked`, 5000);
+  refreshAll();
+}
+
+function subscribe(){
+  if(!PLUS_ENABLED){
+    showToast("Swap Plus is in beta — coming soon! You're all set on the Basic plan for now.", 5000);
+    return;
+  }
+  activatePlus();
+}
+function unsubscribe(){
+  const lost = expireMonthlyCredits();
+  state.isPlus = false;
+  showToast(lost > 0
+    ? `You're back on Basic — priority booking, the map, and ${lost} unused Swap Plus credit${lost > 1 ? 's' : ''} are gone`
+    : "You're back on Basic — priority booking and the map are locked", 5000);
+  refreshAll();
+}
+
+function refreshAll(){
+  document.getElementById('tierChip').textContent = state.isPlus ? 'Swap Plus' : 'Basic';
+  document.getElementById('tierChip').classList.toggle('is-plus', state.isPlus);
+  document.getElementById('mapLockDot').style.display = state.isPlus ? 'none' : 'block';
+  updateCreditsChip();
+  renderHome(); renderMap(); renderSwaps(); renderAccount();
+}
+
+function navigate(screen){
+  state.screen = screen;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screen).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+  if(screen === 'map') renderMap();
+  if(screen === 'swaps') renderSwaps();
+}
+
+let toastTimer;
+function showToast(msg, duration = 2600){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function startApp(){
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('onboarding').style.display = 'flex';
+}
+
+if(loadState()){
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  refreshAll();
+} else {
+  renderOnboarding();
+}
+</script>
+</body>
+</html>
