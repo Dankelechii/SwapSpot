@@ -11,7 +11,7 @@ No build step. Either:
 
 Open index.html directly in a browser, or
 Serve it locally: npx serve . (or any static file server) and visit http://localhost:3000, or
-Enable GitHub Pages on this repo (Settings → Pages → deploy from the main branch, root folder) and it'll be live at https://<your-username>.github.io/<repo-name>/
+Enable GitHub Pages on this repo (Settings → Pages → deploy from the main branch, root folder) and it'll be live at https://dankelechii.github.io/SwapSpot/
 We'd like people to stress test this
 
 It's already been through several automated passes — injection/XSS attempts, rapid-fire clicking and double-submit race conditions, boundary values (negative credits, absurd offer counts), corrupted saved-session data, and viewport sizes from a 280px phone to a 2560px desktop. All clean at time of writing (one real XSS bug was found this way and fixed — see SECURITY.md if we add one).
