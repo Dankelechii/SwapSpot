@@ -392,6 +392,58 @@
     from{ transform: rotate(0deg); }
     to{ transform: rotate(360deg); }
   }
+
+  /* ---- splash → onboarding interstitial: a car parking into a bay ---- */
+  #carTransition{
+    position:absolute; inset:0; z-index:40;
+    display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 44%, var(--asphalt-3) 0%, var(--asphalt) 72%);
+  }
+  #carTransition.run{ display:flex; animation:ctFade 2.15s linear both; }
+  /* holds ~0.36s after the car settles, so the parked moment actually lands */
+  @keyframes ctFade{ 0%{opacity:0;} 8%{opacity:1;} 88%{opacity:1;} 100%{opacity:0;} }
+  .ct-stage{ width:100%; max-width:330px; }
+
+  /* bay markings paint themselves on */
+  .ct-line{ stroke-dasharray:122; stroke-dashoffset:122; animation:ctDraw 0.44s ease-out both; }
+  .ct-line.l2{ animation-delay:0.05s; }
+  .ct-line.l3{ animation-delay:0.10s; }
+  .ct-line.l4{ animation-delay:0.15s; }
+  .ct-line.long{ stroke-dasharray:216; stroke-dashoffset:216; animation-delay:0.02s; }
+  @keyframes ctDraw{ to{ stroke-dashoffset:0; } }
+
+  /* neighbours already parked */
+  .ct-parked{ animation:ctSettle 0.42s ease-out both; }
+  .ct-parked.a{ animation-delay:0.24s; }
+  .ct-parked.b{ animation-delay:0.36s; }
+  @keyframes ctSettle{ from{ opacity:0; } to{ opacity:0.38; } }
+
+  /* the hero car: drives in on X, then turns and slots in on Y */
+  .ct-hero-x{ animation:ctDrive 0.82s cubic-bezier(0.25,0.85,0.35,1) 0.30s both; }
+  @keyframes ctDrive{ from{ transform:translateX(-272px); } to{ transform:translateX(0); } }
+  .ct-hero-y{
+    transform-origin:165px 110px;
+    animation:ctSlot 0.52s cubic-bezier(0.45,0,0.2,1) 1.02s both;
+  }
+  @keyframes ctSlot{
+    from{ transform:translateY(114px) rotate(90deg); }
+    to{ transform:translateY(0) rotate(0deg); }
+  }
+  .ct-glow{ animation:ctGlow 0.66s ease-out 1.45s both; }
+  @keyframes ctGlow{ 0%{opacity:0;} 40%{opacity:0.5;} 100%{opacity:0.2;} }
+
+  /* the page it hands off to */
+  #onboarding.ob-enter .ob-progress{ animation:obRise 0.42s cubic-bezier(0.22,1,0.36,1) 0.02s both; }
+  #onboarding.ob-enter .ob-body{ animation:obRise 0.46s cubic-bezier(0.22,1,0.36,1) 0.10s both; }
+  #onboarding.ob-enter .ob-footer{ animation:obRise 0.46s cubic-bezier(0.22,1,0.36,1) 0.20s both; }
+  @keyframes obRise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:translateY(0); } }
+
+  @media (prefers-reduced-motion: reduce){
+    .logo-s-spin, #carTransition.run, .ct-line, .ct-parked, .ct-hero-x, .ct-hero-y, .ct-glow,
+    #onboarding.ob-enter .ob-progress, #onboarding.ob-enter .ob-body, #onboarding.ob-enter .ob-footer{
+      animation:none !important;
+    }
+  }
   .splash-word{ font-family:'Oswald',sans-serif; font-weight:700; font-size:32px; letter-spacing:0.005em; margin-bottom:10px; }
   .splash-word .w1{ color:var(--paint); }
   .splash-word .w2{ color:var(--curb); }
@@ -538,6 +590,46 @@
       <div class="splash-pitch">Drivers lending each other their parking spaces. <b>Borrow a bay when you need one, put yours in when you don't</b> — there are only ever as many spaces on the map as members are willing to share.</div>
       <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
       <div class="splash-note">Real backend — accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
+    </div>
+
+    <!-- SPLASH → ONBOARDING INTERSTITIAL -->
+    <div id="carTransition" aria-hidden="true">
+      <svg class="ct-stage" viewBox="0 0 330 250" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- one top-down car body, centred on its own origin so it can be
+               placed and rotated about its middle -->
+          <path id="ctCarBody" d="M0,-43c8.5,0 13.5,4.5 15,12l2.5,16c0.7,4.5 1,9 1,13.5v25c0,9 -1.5,14 -4.5,16.5c-2.8,2.3 -8,3.2 -14,3.2s-11.2,-0.9 -14,-3.2c-3,-2.5 -4.5,-7.5 -4.5,-16.5v-25c0,-4.5 0.3,-9 1,-13.5l2.5,-16c1.5,-7.5 6.5,-12 15,-12z"/>
+          <radialGradient id="ctGlowGrad">
+            <stop offset="0%" stop-color="#F0AC3D" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#F0AC3D" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- the road they arrive along -->
+        <path d="M6,222 H324" fill="none" stroke="var(--paint)" stroke-opacity="0.16"
+              stroke-width="3" stroke-linecap="round" stroke-dasharray="14 17"/>
+
+        <!-- three bays, painted on -->
+        <g fill="none" stroke="var(--paint)" stroke-opacity="0.34" stroke-width="3.5" stroke-linecap="round">
+          <path class="ct-line long" d="M60,52 H270"/>
+          <path class="ct-line" d="M60,52 V168"/>
+          <path class="ct-line l2" d="M130,52 V168"/>
+          <path class="ct-line l3" d="M200,52 V168"/>
+          <path class="ct-line l4" d="M270,52 V168"/>
+        </g>
+
+        <!-- neighbours who already put theirs in -->
+        <use class="ct-parked a" href="#ctCarBody" transform="translate(95,110)" fill="var(--paint)"/>
+        <use class="ct-parked b" href="#ctCarBody" transform="translate(235,110)" fill="var(--paint)"/>
+
+        <!-- and yours, pulling into the empty one -->
+        <g class="ct-hero-x">
+          <g class="ct-hero-y">
+            <circle class="ct-glow" cx="165" cy="110" r="66" fill="url(#ctGlowGrad)"/>
+            <use href="#ctCarBody" transform="translate(165,110)" fill="var(--curb)"/>
+          </g>
+        </g>
+      </svg>
     </div>
 
     <!-- ONBOARDING -->
@@ -2061,9 +2153,36 @@ function showToast(msg, duration = 2600){
   toastTimer = setTimeout(() => t.classList.remove('show'), duration);
 }
 
+const CAR_TRANSITION_MS = 2150; // matches the ctFade animation length
+
+function showOnboardingPage(sequenced){
+  const ob = document.getElementById('onboarding');
+  ob.style.display = 'flex';
+  if(!sequenced) return;
+  ob.classList.remove('ob-enter');
+  void ob.offsetWidth; // reflow, so the stagger restarts if this runs twice
+  ob.classList.add('ob-enter');
+  // Drop the class once it's played, so the page's resting state is its own
+  // and never an animation fill that could strand it at opacity 0.
+  window.setTimeout(() => ob.classList.remove('ob-enter'), 900);
+}
+
 function startApp(){
+  const ct = document.getElementById('carTransition');
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.getElementById('splash').style.display = 'none';
-  document.getElementById('onboarding').style.display = 'flex';
+
+  // Straight through for anyone who's asked for less motion.
+  if(!ct || reduced){
+    showOnboardingPage(false);
+    return;
+  }
+
+  ct.classList.add('run');
+  window.setTimeout(() => {
+    ct.classList.remove('run');
+    showOnboardingPage(true);
+  }, CAR_TRANSITION_MS);
 }
 
 async function initApp(){
