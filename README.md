@@ -6,6 +6,15 @@ tier (currently locked, in beta).
 
 **Live demo:** https://dankelechii.github.io/SwapSpot/
 
+## See it work
+
+[![SwapSpot in twenty seconds](media/demo-poster.jpg)](https://dankelechii.github.io/SwapSpot/media/demo.mp4)
+
+[Watch the 20 second demo](https://dankelechii.github.io/SwapSpot/media/demo.mp4)
+(has sound). An empty map fills as neighbours lend their bays, a real listing
+gets requested for 5 credits, and the credits come straight back when you lend
+yours out. That loop is the whole product.
+
 ## How it works
 
 The front end is still one self-contained file- `index.html`, no build step,
