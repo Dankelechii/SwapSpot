@@ -819,7 +819,8 @@
         <div class="plan-toggle-wrap" id="planCards"></div>
         <div style="padding:0 20px 6px; display:flex; flex-direction:column; gap:8px;">
           <button class="btn btn-outline btn-block" onclick="openTermsModal()">View Terms &amp; Conditions</button>
-          <button class="btn btn-outline btn-block" id="signOutBtn" style="display:none;" onclick="signOut()">Sign out</button>
+          <!-- label and handler are set by renderAccount(): real sign-out, or ending a test session -->
+          <button class="btn btn-outline btn-block" id="signOutBtn" style="display:none;">Sign out</button>
         </div>
       </div>
 
@@ -1784,9 +1785,10 @@ async function submitListing(){
   }
 }
 
-async function signOut(){
-  if(!(backendReady && sb)) return;
-  await sb.auth.signOut();
+// Wipes the local session and returns to the landing page, exactly as a first
+// visit looks. Shared by signing out of a real account and by ending a test
+// session, which otherwise had no way back.
+function resetToLanding(){
   session = null;
   user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
   state.mySwaps = [];
@@ -1797,13 +1799,23 @@ async function signOut(){
   obStep = 1; obMode = 'signup'; awaitingConfirmation = false;
   resumeTarget = 'onboarding';
   renderOnboarding();
-  // back to the landing page, same as a first visit
   const cta = document.querySelector('.splash-cta');
-  if(cta) cta.textContent = 'Get started';
+  if(cta){ cta.disabled = false; cta.textContent = 'Get started'; }
   const tester = document.querySelector('.splash-tester');
   if(tester) tester.style.display = '';
   document.getElementById('onboarding').style.display = 'none';
   document.getElementById('splash').style.display = 'flex';
+}
+
+async function signOut(){
+  if(!(backendReady && sb)) return;
+  await sb.auth.signOut();
+  resetToLanding();
+}
+
+function endTesterSession(){
+  resetToLanding();
+  showToast('Test session ended. Create a real account any time.', 4000);
 }
 
 function showPin(id){
@@ -1978,8 +1990,18 @@ function onTesterField(){
 }
 
 function enterAsTester(){
-  user.name = document.getElementById('obTesterName').value.trim();
-  user.email = '';
+  const name = document.getElementById('obTesterName').value.trim();
+  // Start clean. Someone can reach here from the confirm-your-email screen
+  // after already uploading a bay photo, and a test session should not
+  // inherit a verification state or avatar it did not earn.
+  user = {
+    name, email:'', avatar:null, bill:null, verification:'unverified',
+    credits:0, creditLog:[], everSubscribed:false,
+    plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null },
+    isTester:true
+  };
+  state.mySwaps = [];
+  ownerInboxRequests = [];
   user.credits = 5;
   user.creditLog = [{ label: 'Tester welcome credits', amount: 5 }];
   document.getElementById('onboarding').style.display = 'none';
@@ -2218,7 +2240,20 @@ function renderAccount(){
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
 
   const signOutBtn = document.getElementById('signOutBtn');
-  if(signOutBtn) signOutBtn.style.display = (backendReady && session) ? 'block' : 'none';
+  if(signOutBtn){
+    if(backendReady && session){
+      signOutBtn.style.display = 'block';
+      signOutBtn.textContent = 'Sign out';
+      signOutBtn.onclick = signOut;
+    } else if(user.isTester){
+      // a test session has no Supabase session, so it needs its own way out
+      signOutBtn.style.display = 'block';
+      signOutBtn.textContent = 'End test session';
+      signOutBtn.onclick = endTesterSession;
+    } else {
+      signOutBtn.style.display = 'none';
+    }
+  }
   const listBtn = document.getElementById('listABayBtn');
   if(listBtn){
     if(backendReady && session){
@@ -2359,31 +2394,52 @@ function showOnboardingPage(sequenced){
 // it, because the landing page always shows first.
 let resumeTarget = 'onboarding';
 
-function enterAppShell(){
+// Fills the screens before revealing them, so a resumed session never shows
+// an empty feed. The landing page stays up for the wait, which is the only
+// thing on screen that can honestly say "still working".
+async function enterAppShell(){
+  const cta = document.querySelector('.splash-cta');
+  const label = cta && cta.textContent;
+  if(backendReady && session){
+    if(cta){ cta.disabled = true; cta.textContent = 'Loading your bays...'; }
+    try{
+      await refreshBackendData();
+    } finally {
+      if(cta){ cta.disabled = false; cta.textContent = label; }
+    }
+  } else {
+    refreshAll();
+  }
+  document.getElementById('splash').style.display = 'none';
   document.getElementById('onboarding').style.display = 'none';
   document.getElementById('appShell').style.display = 'flex';
-  if(backendReady && session) refreshBackendData();
-  else refreshAll();
 }
 
 function startApp(mode){
   const ct = document.getElementById('carTransition');
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const resuming = mode !== 'tester' && resumeTarget === 'app';
-  document.getElementById('splash').style.display = 'none';
+  const splash = document.getElementById('splash');
 
   const land = (sequenced) => {
-    if(resuming){ enterAppShell(); return; }
+    // Read resumeTarget here rather than when the button was tapped:
+    // initApp()'s getSession() may still have been in flight back then, and
+    // sending a signed-in member to the sign-up form is the worse failure.
+    if(mode !== 'tester' && resumeTarget === 'app'){
+      enterAppShell(); // hides the splash itself, once the data is in
+      return;
+    }
+    splash.style.display = 'none';
     if(mode === 'tester'){ obMode = 'tester'; awaitingConfirmation = false; }
     else { obMode = 'signup'; obStep = 1; }
     renderOnboarding();
     showOnboardingPage(sequenced);
   };
 
-  // The interstitial introduces the idea, so it plays on the way in. Someone
-  // resuming a session has already seen it, and anyone who asked for less
-  // motion never does.
-  if(!ct || reduced || resuming){
+  // Whether to play the interstitial has to be decided now, but that choice is
+  // only cosmetic, so a stale resumeTarget here costs nothing. Someone
+  // resuming has already seen it, and anyone who asked for less motion never
+  // does.
+  if(!ct || reduced || (mode !== 'tester' && resumeTarget === 'app')){
     land(false);
     return;
   }
