@@ -1,8 +1,8 @@
-# /brag launch-video output: rendered video, poster, and the Hyperframes
+# /brag launch-video output- rendered video, poster, and the Hyperframes
 # project with its bundled music, fonts and SFX. Regenerate with /brag.
 brag-output/
 
-# Local agent/editor tooling: launch config and scratch worktrees,
+# Local agent/editor tooling- launch config and scratch worktrees,
 # specific to one machine rather than to the project.
 .claude/
 

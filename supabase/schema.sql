@@ -9,7 +9,7 @@ create extension if not exists citext;
 create extension if not exists pgcrypto;
 
 -- =========================================================================
--- PROFILES: public-ish identity. No balance, no verification documents here.
+-- PROFILES- public-ish identity. No balance, no verification documents here.
 -- =========================================================================
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -23,7 +23,7 @@ create table if not exists profiles (
 alter table profiles enable row level security;
 
 -- Anyone signed in can see who they're swapping with (name, avatar, verified
--- badge): this is what listings need to render "Swap with Meera R. ✓Verified".
+-- badge)- this is what listings need to render "Swap with Meera R. ✓Verified".
 create policy "profiles are readable by any authenticated user"
   on profiles for select
   to authenticated
@@ -39,7 +39,7 @@ grant select on profiles to authenticated;
 grant update (display_name, avatar_url) on profiles to authenticated;
 
 -- =========================================================================
--- WALLETS: credit balance. Never written to directly by the client; only
+-- WALLETS- credit balance. Never written to directly by the client; only
 -- the security-definer RPCs below touch this, so a client can't grant itself
 -- credits by calling the table API.
 -- =========================================================================
@@ -58,7 +58,7 @@ create policy "users read only their own wallet"
   using (user_id = auth.uid());
 
 grant select on wallets to authenticated;
--- Deliberately no insert/update/delete grant for authenticated: RPCs use
+-- Deliberately no insert/update/delete grant for authenticated- RPCs use
 -- security definer to bypass RLS and are the only writers.
 
 create table if not exists credit_ledger (
@@ -84,7 +84,7 @@ create policy "users read only their own ledger"
 grant select on credit_ledger to authenticated;
 
 -- =========================================================================
--- VERIFICATIONS: UK driving licence / national ID. The document itself
+-- VERIFICATIONS- UK driving licence / national ID. The document itself
 -- lives in a PRIVATE storage bucket (policy below); this table only holds
 -- the review state, never the image.
 -- =========================================================================
@@ -118,14 +118,14 @@ grant select, insert on verifications to authenticated;
 -- for now, or an admin tool later) can move status to approved/rejected.
 
 -- =========================================================================
--- LISTINGS: a bay someone is lending out.
+-- LISTINGS- a bay someone is lending out.
 -- =========================================================================
 create table if not exists listings (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   bay_number text not null,
   street text not null,
-  area text not null, -- e.g. "Shoreditch, London": used for the radius search
+  area text not null, -- e.g. "Shoreditch, London"- used for the radius search
   lat double precision,
   lng double precision,
   photo_storage_path text, -- public bucket; shown to anyone browsing
@@ -191,7 +191,7 @@ create trigger trg_verified_listing_owner
   for each row execute function enforce_verified_listing_owner();
 
 -- =========================================================================
--- SWAP REQUESTS: a booking against a listing.
+-- SWAP REQUESTS- a booking against a listing.
 -- =========================================================================
 create table if not exists swap_requests (
   id uuid primary key default gen_random_uuid(),
@@ -221,7 +221,7 @@ create policy "requester or listing owner can read a swap request"
   );
 
 grant select on swap_requests to authenticated;
--- No direct insert/update grant: every state change goes through the RPCs
+-- No direct insert/update grant- every state change goes through the RPCs
 -- below, which compute cost server-side instead of trusting the client.
 
 -- =========================================================================
@@ -244,7 +244,7 @@ create policy "users read only their own subscription"
   using (user_id = auth.uid());
 
 grant select on plus_subscriptions to authenticated;
--- Written only by grant_plus_credits()/cancel_plus() below: real billing
+-- Written only by grant_plus_credits()/cancel_plus() below- real billing
 -- (Stripe or similar) is not modelled here; see supabase/README.md.
 
 -- =========================================================================
@@ -344,7 +344,7 @@ declare
 begin
   select * into v_req from swap_requests where id = p_request_id for update;
   if not found or v_req.status not in ('pending') then
-    return; -- already settled or missing: no-op, matches prototype's guard
+    return; -- already settled or missing- no-op, matches prototype's guard
   end if;
 
   if not p_approved then
@@ -377,7 +377,7 @@ end;
 $$;
 
 revoke execute on function settle_swap_request(uuid, boolean) from public, anon, authenticated;
--- Not granted to authenticated at all: only called internally by
+-- Not granted to authenticated at all- only called internally by
 -- request_swap() (instant book) and approve/decline below (SECURITY DEFINER
 -- lets those call it regardless).
 
@@ -426,7 +426,7 @@ revoke execute on function decline_swap_request(uuid) from public, anon;
 grant execute on function decline_swap_request(uuid) to authenticated;
 
 -- =========================================================================
--- STORAGE: private bucket for verification documents, public bucket for
+-- STORAGE- private bucket for verification documents, public bucket for
 -- bay photos. Run once; Supabase storage buckets are created via the
 -- dashboard or the storage API, policies below assume 'verification-docs'
 -- (private) and 'bay-photos' (public) already exist.
@@ -461,7 +461,7 @@ create policy "owners upload their own bay photos"
   );
 
 -- =========================================================================
--- READ-SIDE RPCs for the frontend: added when index.html was wired to this
+-- READ-SIDE RPCs for the frontend- added when index.html was wired to this
 -- backend. swap_requests' RLS (requester or listing owner only) correctly
 -- hides individual requests from other browsers, but the browse feed still
 -- needs an aggregate "N offers" count per listing, and both the requester
