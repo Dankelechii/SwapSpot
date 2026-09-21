@@ -88,6 +88,33 @@ admin review screen- is future work, not done here.
   for now.
 - **Listing expiry.** `status = 'expired'` exists as a value but nothing
   flips it yet; needs a scheduled job comparing `available_end` to `now()`.
+- **Social sign-in.** The plan is Google, Apple (iCloud) and Microsoft
+  (Hotmail/Outlook) through Supabase Auth, replacing the email and password
+  form. Deliberately not built yet: it is being held until the GitHub feedback
+  round is done, so testers aren't blocked behind an OAuth consent screen while
+  we are still changing the product. Each provider needs its own OAuth client
+  registered and its redirect URL added in Authentication, Sign In / Providers.
+
+## Sign-in during the testing round
+
+Two deliberate, temporary departures from the above while we gather feedback.
+
+**Email confirmation is turned off** in the dashboard (Authentication, Sign In /
+Providers, Email, "Confirm email"). With it on, a tester had to leave the app,
+find the mail and come back before seeing a single bay, and most did not. With
+it off, `signUp()` returns a session straight away and they land on the feed.
+
+The cost: anyone can register with an email address they do not own. That is
+acceptable for a prototype, and listing a bay is still gated on manual
+verification, so nobody can put a bay on the map without being approved by
+hand. **Turn it back on before any real launch**, and certainly before social
+sign-in replaces the form.
+
+**A tester path with no account at all.** `index.html` offers "Just testing?
+Skip the sign-up" on the splash, which takes a display name and nothing else
+and runs against the local demo listings. It never touches this database,
+because every listing and swap RPC needs an `auth.uid()`. It exists so someone
+can see the whole flow in ten seconds; it is not a backend account.
 
 ## Getting this live
 
