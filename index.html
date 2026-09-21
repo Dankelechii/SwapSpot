@@ -395,7 +395,9 @@
   .splash-word{ font-family:'Oswald',sans-serif; font-weight:700; font-size:32px; letter-spacing:0.005em; margin-bottom:10px; }
   .splash-word .w1{ color:var(--paint); }
   .splash-word .w2{ color:var(--curb); }
-  .splash-tag{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:56px; }
+  .splash-tag{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:18px; }
+  .splash-pitch{ font-size:12.5px; color:var(--paint-dim); line-height:1.65; max-width:272px; margin-bottom:38px; }
+  .splash-pitch b{ color:var(--paint); font-weight:600; }
   .splash-cta{ width:100%; max-width:250px; }
   .splash-note{ margin-top:16px; font-size:11px; color:var(--paint-dim); max-width:260px; line-height:1.5; }
 
@@ -454,6 +456,21 @@
   .credits-balance{ display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
   .credits-balance .num{ font-family:'Oswald',sans-serif; font-size:34px; font-weight:700; color:var(--curb); }
   .credits-balance .unit{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); text-transform:uppercase; letter-spacing:0.08em; }
+  /* ---- community / give-to-get ---- */
+  .community-card{
+    margin:0 20px 14px; padding:15px 16px;
+    background:var(--asphalt-3); border-radius:var(--radius-card);
+    border:1px solid rgba(246,244,236,0.08);
+  }
+  .cc-head{
+    display:flex; align-items:center; gap:9px;
+    font-size:13px; color:var(--paint-dim); font-weight:500; margin-bottom:7px;
+  }
+  .cc-head svg{ width:19px; height:19px; color:var(--curb); flex:0 0 auto; }
+  .cc-head b{ color:var(--paint); font-weight:600; }
+  .cc-body{ font-size:11.5px; color:var(--paint-dim); line-height:1.6; margin-bottom:12px; }
+  .cc-body b{ color:var(--paint); font-weight:600; }
+
   .credits-rules{ font-size:11.5px; color:var(--paint-dim); line-height:1.6; margin:8px 0 12px; }
   .credits-rules b{ color:var(--paint); }
   .expiry-banner{
@@ -518,6 +535,7 @@
       </svg>
       <div class="splash-word"><span class="w1">Swap</span><span class="w2">Spot</span></div>
       <div class="splash-tag">Parking bays, swapped</div>
+      <div class="splash-pitch">Drivers lending each other their parking spaces. <b>Borrow a bay when you need one, put yours in when you don't</b> — there are only ever as many spaces on the map as members are willing to share.</div>
       <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
       <div class="splash-note">Real backend — accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
     </div>
@@ -679,7 +697,8 @@ const ICONS = {
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
   person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1-4.2 4.4-6.4 7-6.4s6 2.2 7 6.4"/></svg>',
   flame: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2c-1 4.5 3 5.5 3 10a3 3 0 0 1-6 0c0-1 .3-1.8.8-2.4-.4 2 .9 3 .9 3-1.2-4 1.5-5.8.9-10.3-2.6 2-6 5-6 9.3a6.4 6.4 0 0 0 12.8 0c0-5-3-6.5-5.4-9.6Z"/></svg>',
-  coin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.3 9.3c0-1.2 1.2-2 2.7-2s2.7.7 2.7 1.8-1 1.6-2.7 2c-1.7.4-2.7 1-2.7 2s1.2 1.9 2.7 1.9 2.7-.8 2.7-2"/></svg>'
+  coin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.3 9.3c0-1.2 1.2-2 2.7-2s2.7.7 2.7 1.8-1 1.6-2.7 2c-1.7.4-2.7 1-2.7 2s1.2 1.9 2.7 1.9 2.7-.8 2.7-2"/></svg>',
+  car: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3.2 13.4 4.8 8.9A2 2 0 0 1 6.7 7.5h10.6a2 2 0 0 1 1.9 1.4l1.6 4.5"/><path d="M2.6 13.4h18.8v3.3a1 1 0 0 1-1 1H3.6a1 1 0 0 1-1-1Z"/><circle cx="7.1" cy="17.7" r="1.5"/><circle cx="16.9" cy="17.7" r="1.5"/></svg>'
 };
 
 const TERMS_HTML = `
@@ -873,18 +892,27 @@ function setRadius(r){
 function renderHome(){
   document.getElementById('radiusRow').innerHTML = radiusChipsHTML(false);
   const inRange = listings.filter(l => l.mi <= state.radius);
-  document.getElementById('homeSectionLabel').innerHTML = `Available within <b style="color:var(--paint);">${state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi'}</b>`;
+  const radiusLabel = state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi';
+  document.getElementById('homeSectionLabel').innerHTML = `Lent by neighbours within <b style="color:var(--paint);">${radiusLabel}</b>`;
   const listEl = document.getElementById('listingList');
   if(inRange.length === 0){
     listEl.innerHTML = `
       <div class="empty-state">
-        ${ICONS.empty}
-        <h3>Nothing this close</h3>
-        <p>No bays within ${state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi'} of Shoreditch right now — try a wider radius.</p>
+        ${ICONS.car}
+        <h3>No one's lending this close</h3>
+        <p>Nobody within ${radiusLabel} of Shoreditch has put a bay in right now. Try a wider radius — or be the one who lends.</p>
+        <button class="btn btn-outline" onclick="lendMyBay()" style="margin-top:6px;">Lend my bay</button>
       </div>`;
     return;
   }
-  listEl.innerHTML = inRange.map(l => ticketCard(l)).join('');
+  // Counts come from the real feed, so the community line can't overstate itself.
+  const lenders = new Set(inRange.map(l => l.ownerId || l.owner)).size;
+  listEl.innerHTML = `
+    <div class="community-card">
+      <div class="cc-head">${ICONS.car}<span><b>${inRange.length} bay${inRange.length===1?'':'s'}</b> lent by <b>${lenders} neighbour${lenders===1?'':'s'}</b> within ${radiusLabel}</span></div>
+      <div class="cc-body">Every space below belongs to a driver who needs one themselves. <b>Put your bay in when you're not using it</b> — the map only has what members are willing to share.</div>
+      <button class="btn btn-outline btn-block" onclick="lendMyBay()">Lend my bay</button>
+    </div>` + inRange.map(l => ticketCard(l)).join('');
 }
 
 function renderSwaps(){
@@ -893,10 +921,10 @@ function renderSwaps(){
     document.getElementById('screen-swaps').innerHTML = `
       <div class="section-label">My swaps</div>
       <div class="empty-state">
-        ${ICONS.empty}
+        ${ICONS.car}
         <h3>No swaps yet</h3>
-        <p>Request a bay from Home and it'll show up here with its status.</p>
-        <button class="btn btn-outline" onclick="navigate('home')" style="margin-top:6px;">Browse bays</button>
+        <p>Borrow a bay a neighbour has lent, and it'll show up here with its status. Lend yours back when you can — that's what keeps spaces on the map.</p>
+        <button class="btn btn-outline" onclick="navigate('home')" style="margin-top:6px;">See what's being lent</button>
       </div>
       ${inboxHTML}`;
     saveState();
@@ -1464,6 +1492,14 @@ function closeBayPhoto(){
 
 /* ---------------- list a bay (real listings.insert — the trigger in schema.sql rejects unverified owners) ---------------- */
 
+// Listing is gated on a verified account, and the Account screen is where that
+// gating is explained — so send unsigned-in members there rather than opening a
+// modal that would only fail.
+function lendMyBay(){
+  if(backendReady && session) openListingModal();
+  else navigate('account');
+}
+
 function openListingModal(){
   if(!(backendReady && session)){
     showToast(backendReady ? 'Sign in first to list a bay' : "Listing a bay needs a live backend connection", 4000);
@@ -1596,8 +1632,8 @@ function renderOnboarding(){
   if(obStep === 1){
     body.innerHTML = `
       <div class="ob-eyebrow">Step 1 of ${OB_TOTAL}</div>
-      <div class="ob-title">Create your account</div>
-      <div class="ob-sub">Just enough to get you started — you'll prove your parking spot next.</div>
+      <div class="ob-title">Join the drivers near you</div>
+      <div class="ob-sub">SwapSpot runs on members lending each other their parking bays — you'll prove your spot next, so neighbours know it's really yours to lend.</div>
       <div class="field"><label>Full name</label><input type="text" id="obName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onObField()"></div>
       <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
       ${backendReady ? `<div class="field"><label>Password</label><input type="password" id="obPassword" placeholder="At least 6 characters" oninput="onObField()"></div>` : ''}
@@ -1924,7 +1960,7 @@ function renderAccount(){
   document.getElementById('creditsCard').innerHTML = `
     <div class="credits-card">
       <div class="credits-balance"><span class="num">${user.credits}</span><span class="unit">credits</span></div>
-      <div class="credits-rules">Booking a bay costs <b>${COST_STANDARD} credits</b> normally, or <b>${COST_PREMIUM} credits</b> if it's within ${NEAR_METRES}m of your search or if <b>${HOT_THRESHOLD} or more members</b> have made offers on it. You're only charged once the owner approves. When one of your own swaps is confirmed you earn <b>${CREDITS_NORMAL} credits</b> back — <b>${CREDITS_SURGE}</b> if it was surging.${!state.isPlus ? ` Swap Plus is in beta — when it launches, subscribers will get <b>${PLUS_FIRST_CREDITS} welcome credits</b>, then <b>${PLUS_MONTHLY_CREDITS} credits</b> every billing cycle after that.` : ''}</div>
+      <div class="credits-rules"><b>Credits are how the community stays even.</b> You earn them by lending your bay to someone else, and spend them borrowing one — so the spaces you take are paid for by the ones you give. Booking a bay costs <b>${COST_STANDARD} credits</b> normally, or <b>${COST_PREMIUM} credits</b> if it's within ${NEAR_METRES}m of your search or if <b>${HOT_THRESHOLD} or more members</b> have made offers on it. You're only charged once the owner approves. When one of your own swaps is confirmed you earn <b>${CREDITS_NORMAL} credits</b> back — <b>${CREDITS_SURGE}</b> if it was surging.${!state.isPlus ? ` Swap Plus is in beta — when it launches, subscribers will get <b>${PLUS_FIRST_CREDITS} welcome credits</b>, then <b>${PLUS_MONTHLY_CREDITS} credits</b> every billing cycle after that.` : ''}</div>
       ${state.isPlus && grant.active && grant.remaining > 0 ? `
         <div class="expiry-banner">
           ⏳ <b>${grant.remaining} Swap Plus credit${grant.remaining>1?'s':''}</b> expire on <b>${expiryDate}</b> (${daysLeft} day${daysLeft!==1?'s':''} left) if unused this billing cycle.
