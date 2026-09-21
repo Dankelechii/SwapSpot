@@ -508,6 +508,25 @@
   .credits-balance{ display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
   .credits-balance .num{ font-family:'Oswald',sans-serif; font-size:34px; font-weight:700; color:var(--curb); }
   .credits-balance .unit{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); text-transform:uppercase; letter-spacing:0.08em; }
+  /* ---- the community compact: why the app needs everyone ---- */
+  .compact{
+    margin:2px 0 20px; padding:14px 15px;
+    background:var(--asphalt-3); border-radius:var(--radius-card);
+    border:1px solid rgba(246,244,236,0.08);
+  }
+  .compact-title{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--curb); margin-bottom:11px;
+  }
+  .compact-item{
+    display:flex; gap:10px; align-items:flex-start;
+    font-size:12.5px; color:var(--paint-dim); line-height:1.55; margin-bottom:10px;
+  }
+  .compact-item:last-child{ margin-bottom:0; }
+  .compact-item svg{ width:17px; height:17px; color:var(--curb); flex:0 0 auto; margin-top:2px; }
+  .compact-item b{ color:var(--paint); font-weight:600; }
+  .splash-tester{ margin-top:14px; }
+
   /* ---- community / give-to-get ---- */
   .community-card{
     margin:0 20px 14px; padding:15px 16px;
@@ -589,6 +608,7 @@
       <div class="splash-tag">Parking bays, swapped</div>
       <div class="splash-pitch">Drivers lending each other their parking spaces. <b>Borrow a bay when you need one, put yours in when you don't</b>: there are only ever as many spaces on the map as members are willing to share.</div>
       <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
+      <button class="ob-skip splash-tester" onclick="startApp('tester')">Just testing? Skip the sign-up</button>
       <div class="splash-note">Real backend: accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
     </div>
 
@@ -1662,8 +1682,15 @@ async function signOut(){
   try{ localStorage.removeItem(STORAGE_KEY); } catch(e){}
   document.getElementById('appShell').style.display = 'none';
   obStep = 1; obMode = 'signup'; awaitingConfirmation = false;
-  document.getElementById('onboarding').style.display = 'flex';
+  resumeTarget = 'onboarding';
   renderOnboarding();
+  // back to the landing page, same as a first visit
+  const cta = document.querySelector('.splash-cta');
+  if(cta) cta.textContent = 'Get started';
+  const tester = document.querySelector('.splash-tester');
+  if(tester) tester.style.display = '';
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('splash').style.display = 'flex';
 }
 
 function showPin(id){
@@ -1688,12 +1715,41 @@ function showPin(id){
 
 /* ---------------- onboarding ---------------- */
 
-function renderOnboarding(){
-  document.getElementById('obProgress').innerHTML =
-    Array.from({length:OB_TOTAL}).map((_,i) => `<div class="ob-dot ${i < obStep ? 'done' : ''}"></div>`).join('');
+// The bargain the whole app rests on, stated plainly. Shown wherever someone
+// is about to join, because a swap market with only borrowers has no bays.
+function communityCompactHTML(){
+  return `
+    <div class="compact">
+      <div class="compact-title">The deal that makes this work</div>
+      <div class="compact-item">${ICONS.car}<span><b>Lend your bay when you're not using it.</b> That's what puts a space on the map for someone else.</span></div>
+      <div class="compact-item">${ICONS.swap}<span><b>Borrow one when you need it</b>, paid for with the credits your own lending earned.</span></div>
+      <div class="compact-item">${ICONS.person}<span><b>It only works if everyone does both.</b> Members who only ever borrow run out of credits, and a neighbourhood that only borrows runs out of bays.</span></div>
+    </div>`;
+}
 
+function renderOnboarding(){
   const body = document.getElementById('obBody');
   const footer = document.getElementById('obFooter');
+
+  // Tester entry: a display name and nothing else. No email, no password, no
+  // confirmation link. Runs against the local demo data on this device.
+  if(obMode === 'tester'){
+    document.getElementById('obProgress').innerHTML = '';
+    body.innerHTML = `
+      <div class="ob-eyebrow">Test session</div>
+      <div class="ob-title">Pick a name and jump in</div>
+      <div class="ob-sub">No email, no password, no confirmation link. This runs on your device with sample bays, so you can try the whole app straight away.</div>
+      <div class="field"><label>Display name</label><input type="text" id="obTesterName" placeholder="Jordan" value="${escapeHtml(user.name)}" oninput="onTesterField()"></div>
+      ${communityCompactHTML()}
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="enterAsTester()" disabled>Enter SwapSpot</button>
+      <button class="ob-skip" onclick="obMode='signup'; obStep=1; awaitingConfirmation=false; renderOnboarding();">Create a real account instead</button>`;
+    onTesterField();
+    return;
+  }
+
+  document.getElementById('obProgress').innerHTML =
+    Array.from({length:OB_TOTAL}).map((_,i) => `<div class="ob-dot ${i < obStep ? 'done' : ''}"></div>`).join('');
 
   if(awaitingConfirmation){
     body.innerHTML = `
@@ -1702,6 +1758,7 @@ function renderOnboarding(){
       <div class="ob-sub">We've sent a confirmation link to <b>${escapeHtml(user.email)}</b>. Click it, then come back and sign in.</div>
     `;
     footer.innerHTML = `<button class="btn btn-plus btn-block" onclick="awaitingConfirmation=false; obMode='signin'; obStep=1; renderOnboarding();">I've confirmed: sign in</button>
+      <button class="ob-skip" onclick="awaitingConfirmation=false; obMode='tester'; renderOnboarding();">Don't want to wait? Test with a display name instead</button>
       <button class="ob-skip" onclick="awaitingConfirmation=false; obMode='signup'; obStep=1; renderOnboarding();">Back</button>`;
     return;
   }
@@ -1730,6 +1787,7 @@ function renderOnboarding(){
       <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
       ${backendReady ? `<div class="field"><label>Password</label><input type="password" id="obPassword" placeholder="At least 6 characters" oninput="onObField()"></div>` : ''}
       <div class="ob-sub" id="obAuthError" style="color:var(--meter);"></div>
+      ${communityCompactHTML()}
     `;
     footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="obNext()" disabled>Continue</button>
       ${backendReady ? `<button class="ob-skip" onclick="obMode='signin'; renderOnboarding();">Already have an account? Sign in</button>` : ''}`;
@@ -1798,6 +1856,23 @@ function escapeHtml(str){
 function initials(name){
   if(!name) return '';
   return name.trim().split(/\s+/).slice(0,2).map(p => p[0].toUpperCase()).join('');
+}
+
+function onTesterField(){
+  const btn = document.getElementById('obNextBtn');
+  const name = document.getElementById('obTesterName')?.value.trim() || '';
+  if(btn) btn.disabled = name.length < 2;
+}
+
+function enterAsTester(){
+  user.name = document.getElementById('obTesterName').value.trim();
+  user.email = '';
+  user.credits = 5;
+  user.creditLog = [{ label: 'Tester welcome credits', amount: 5 }];
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  refreshAll();
+  showToast(`You're in as ${user.name.split(' ')[0]}. 5 credits to start: enough to borrow once before you lend.`, 5500);
 }
 
 function onObField(){
@@ -2167,46 +2242,69 @@ function showOnboardingPage(sequenced){
   window.setTimeout(() => ob.classList.remove('ob-enter'), 900);
 }
 
-function startApp(){
+// Where "Get started" should land. initApp() works this out but never acts on
+// it, because the landing page always shows first.
+let resumeTarget = 'onboarding';
+
+function enterAppShell(){
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  if(backendReady && session) refreshBackendData();
+  else refreshAll();
+}
+
+function startApp(mode){
   const ct = document.getElementById('carTransition');
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const resuming = mode !== 'tester' && resumeTarget === 'app';
   document.getElementById('splash').style.display = 'none';
 
-  // Straight through for anyone who's asked for less motion.
-  if(!ct || reduced){
-    showOnboardingPage(false);
+  const land = (sequenced) => {
+    if(resuming){ enterAppShell(); return; }
+    if(mode === 'tester'){ obMode = 'tester'; awaitingConfirmation = false; }
+    else { obMode = 'signup'; obStep = 1; }
+    renderOnboarding();
+    showOnboardingPage(sequenced);
+  };
+
+  // The interstitial introduces the idea, so it plays on the way in. Someone
+  // resuming a session has already seen it, and anyone who asked for less
+  // motion never does.
+  if(!ct || reduced || resuming){
+    land(false);
     return;
   }
 
   ct.classList.add('run');
   window.setTimeout(() => {
     ct.classList.remove('run');
-    showOnboardingPage(true);
+    land(true);
   }, CAR_TRANSITION_MS);
 }
 
+// Works out where the member should end up, but never skips ahead: the
+// landing page is always the first thing anyone sees.
 async function initApp(){
   if(backendReady){
     try{
       const { data } = await sb.auth.getSession();
       if(data && data.session){
         session = data.session;
-        document.getElementById('splash').style.display = 'none';
-        document.getElementById('onboarding').style.display = 'none';
-        document.getElementById('appShell').style.display = 'flex';
-        await refreshBackendData();
-        return;
+        resumeTarget = 'app';
       }
     } catch(e){ console.warn('getSession failed, falling back to local demo mode', e); }
     try{
       sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
     } catch(e){ /* not critical */ }
   }
-  if(loadState()){
-    document.getElementById('splash').style.display = 'none';
-    document.getElementById('onboarding').style.display = 'none';
-    document.getElementById('appShell').style.display = 'flex';
-    refreshAll();
+
+  if(resumeTarget !== 'app' && loadState()) resumeTarget = 'app';
+
+  if(resumeTarget === 'app'){
+    const cta = document.querySelector('.splash-cta');
+    if(cta) cta.textContent = 'Continue';
+    const tester = document.querySelector('.splash-tester');
+    if(tester) tester.style.display = 'none';
   } else {
     renderOnboarding();
   }
