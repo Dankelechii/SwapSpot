@@ -18,7 +18,7 @@ It's already been through several automated passes- injection/XSS attempts, rapi
 
 What's genuinely more useful coming from real people than from scripted tests:
 
-Real devices and browsers- Safari on an actual iPhone, older Android Chrome, Firefox — the automated passes only ran headless Chromium
+Real devices and browsers- Safari on an actual iPhone, older Android Chrome, Firefox- the automated passes only ran headless Chromium
 Touch gestures- swipes, pinch-zoom, long-press, double-tap-to-zoom behavior on the map screen
 Screen readers / accessibility- VoiceOver, TalkBack, keyboard-only navigation through the whole onboarding flow
 Weird real-world input- pasting text with emoji, RTL text, or copy-pasted formatting into the name/email fields
