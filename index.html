@@ -519,7 +519,7 @@
       <div class="splash-word"><span class="w1">Swap</span><span class="w2">Spot</span></div>
       <div class="splash-tag">Parking bays, swapped</div>
       <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
-      <div class="splash-note">Prototype build — sign-up, verification, and payments aren't connected to anything real yet.</div>
+      <div class="splash-note">Real backend — accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
     </div>
 
     <!-- ONBOARDING -->
@@ -569,10 +569,14 @@
         <div id="creditsCard"></div>
         <div class="section-label">Your bay verification</div>
         <div class="verify-block-inline" id="accountVerifyBlock" style="padding:0 20px;"></div>
+        <div style="padding:8px 20px 0;">
+          <button class="btn btn-outline btn-block" id="listABayBtn" onclick="openListingModal()">List a bay</button>
+        </div>
         <div class="section-label" style="margin-top:8px;">Membership</div>
         <div class="plan-toggle-wrap" id="planCards"></div>
-        <div style="padding:0 20px 6px;">
+        <div style="padding:0 20px 6px; display:flex; flex-direction:column; gap:8px;">
           <button class="btn btn-outline btn-block" onclick="openTermsModal()">View Terms &amp; Conditions</button>
+          <button class="btn btn-outline btn-block" id="signOutBtn" style="display:none;" onclick="signOut()">Sign out</button>
         </div>
       </div>
 
@@ -632,12 +636,37 @@
       </div>
     </div>
 
+    <!-- LIST A BAY MODAL (real listings.insert — only succeeds server-side for verified owners) -->
+    <div class="modal-overlay" id="listingModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>List a bay</h3>
+          <button class="modal-close" onclick="closeListingModal()">✕</button>
+        </div>
+        <div id="listingModalBody"></div>
+      </div>
+    </div>
+
     <input type="file" id="avatarInput" accept="image/*" style="display:none;" onchange="onAvatarChosen(event)">
     <input type="file" id="billInput" accept="image/*" style="display:none;" onchange="onBillChosen(event)">
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ---------------- real backend (Supabase) — degrades to the local demo below if unreachable ---------------- */
+const SUPABASE_URL = 'https://woxumfxyghqpesooobjq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_UhT3PuPNRVtF51FPv0XUDA_5m-wf4tX';
+let sb = null;
+let backendReady = false;
+let session = null; // current Supabase auth session, or null
+try{
+  if(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    backendReady = true;
+  }
+} catch(e){ console.warn('Supabase client init failed — running in local demo mode', e); }
+
 const ICONS = {
   swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h13l-3-3.5M20 17H7l3 3.5"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>',
@@ -683,7 +712,7 @@ const TERMS_HTML = `
   <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction — if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
 `;
 
-const listings = [
+const LOCAL_DEMO_LISTINGS = [
   { id:1, bay:'BAY 14A', street:'Shoreditch High St', time:'Today · 09:00–17:00', owner:'Meera R.', mi:0.05, priority:false, offers:2 },
   { id:2, bay:'BAY 02C', street:'Old Street', time:'Today · 12:00–14:00', owner:'Tom K.', mi:0.9, priority:true, offers:6 },
   { id:3, bay:'BAY 21', street:'Hoxton Square', time:'Tomorrow · 08:00–18:00', owner:'Ayesha N.', mi:1.4, priority:false, offers:1 },
@@ -691,6 +720,79 @@ const listings = [
   { id:5, bay:'BAY 30', street:'Redchurch Street', time:'Fri · 07:00–19:00', owner:'Owen D.', mi:2.6, priority:true, offers:5 },
   { id:6, bay:'BAY 11', street:'Columbia Road', time:'Sat · 09:00–13:00', owner:'Layla F.', mi:3.8, priority:false, offers:4 },
 ];
+// Real listings (from Supabase) replace this array's contents once fetched;
+// it starts as the local demo set so the UI has something to render before
+// the first fetch completes, and falls back to it if the backend is down.
+let listings = LOCAL_DEMO_LISTINGS.map(l => ({...l}));
+
+// Fixed reference point (Shoreditch High St) used to compute a real distance
+// for real listings, since there's no user geolocation in this build yet.
+const SEARCH_ORIGIN = { lat: 51.5228, lng: -0.0791 };
+function haversineMiles(lat1, lng1, lat2, lng2){
+  if(lat1==null || lng1==null || lat2==null || lng2==null) return null;
+  const R = 3958.8; // miles
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// UUIDs can't be dropped straight into an inline onclick="fn(${id})" — this
+// renders the right JS literal (quoted string vs bare number) for either.
+function jsId(id){ return typeof id === 'string' ? `'${id.replace(/'/g,"\\'")}'` : id; }
+// bayPhotoSVG()'s illustration is procedurally seeded from a numeric id —
+// this turns a uuid into a stable number so real listings still get one.
+function hashId(id){
+  if(typeof id === 'number') return id;
+  let h = 0;
+  for(let i=0;i<id.length;i++){ h = (h*31 + id.charCodeAt(i)) >>> 0; }
+  return h;
+}
+
+function formatTimeRange(startISO, endISO){
+  const start = new Date(startISO), end = new Date(endISO);
+  const now = new Date();
+  const dayKey = d => d.toDateString();
+  const today = new Date(now); const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1);
+  let dayLabel;
+  if(dayKey(start) === dayKey(today)) dayLabel = 'Today';
+  else if(dayKey(start) === dayKey(tomorrow)) dayLabel = 'Tomorrow';
+  else dayLabel = start.toLocaleDateString('en-GB', { weekday:'short' });
+  const fmt = d => d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${dayLabel} · ${fmt(start)}–${fmt(end)}`;
+}
+
+// Pulls the browsable feed from the real backend via the browse_listings()
+// RPC (a SECURITY DEFINER function — see supabase/schema.sql — because RLS
+// on swap_requests correctly hides individual requests from other members,
+// so the per-listing offer count has to come from a server-side aggregate,
+// not a client-side count() a browsing user isn't allowed to run).
+async function fetchListings(){
+  if(!backendReady) return false;
+  try{
+    const { data, error } = await sb.rpc('browse_listings');
+    if(error) throw error;
+    listings = (data || []).map(row => {
+      const mi = haversineMiles(SEARCH_ORIGIN.lat, SEARCH_ORIGIN.lng, row.lat, row.lng);
+      return {
+        id: row.id,
+        bay: row.bay_number,
+        street: row.street,
+        time: formatTimeRange(row.available_start, row.available_end),
+        owner: row.owner_name,
+        ownerVerified: row.owner_verified,
+        ownerId: row.owner_id,
+        mi: mi == null ? 0 : Math.round(mi * 100) / 100,
+        priority: row.priority_only,
+        offers: row.offer_count || 0,
+      };
+    });
+    return true;
+  } catch(e){
+    console.warn('fetchListings failed — keeping local demo listings', e);
+    return false;
+  }
+}
 
 const RADIUS_OPTIONS = [0.5, 1, 2, 5];
 const HOT_THRESHOLD = 5;
@@ -707,6 +809,9 @@ const DURATION_OPTIONS = Array.from({length:12}, (_,i) => `${i+1} hour${i+1>1?'s
 let state = { screen:'home', isPlus:false, mySwaps:[], radius:1 };
 let user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
 let obStep = 1;
+let obMode = 'signup'; // 'signup' | 'signin'
+let obPassword = ''; // kept out of `user` so it never lands in localStorage
+let awaitingConfirmation = false; // true once signed up but email confirmation is pending
 const OB_TOTAL = 4;
 let swapKeyCounter = 1;
 let bookingDraft = null;
@@ -739,15 +844,15 @@ function ticketCard(l, opts={}){
         <span class="status-text ${l.priority?'priority':''}">${l.priority ? 'Plus priority' : 'Available'}</span>
         <span class="watchers ${hot?'hot':''}" id="watch-${l.id}">${hot?ICONS.flame:ICONS.person}<span>${l.offers}</span></span>
       </div>
-      <button class="ticket-street-link" onclick="openBayPhoto(${l.id})">${l.street}${ICONS.camera}</button>
+      <button class="ticket-street-link" onclick="openBayPhoto(${jsId(l.id)})">${l.street}${ICONS.camera}</button>
       <div class="ticket-time">${l.time} · ${l.mi} mi away</div>
-      <div class="ticket-swapper">Swap with <b>${l.owner}</b> <span class="verified-badge">${ICONS.shield}Verified</span></div>
+      <div class="ticket-swapper">Swap with <b>${l.owner}</b> ${l.ownerVerified === false ? '' : `<span class="verified-badge">${ICONS.shield}Verified</span>`}</div>
       <div class="cost-line ${premium?'premium':''}" id="cost-${l.id}">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
     </div>
     <div class="ticket-stub">
       ${locked
         ? `<div class="stub-btn locked-stub">${ICONS.lock}Plus only</div>`
-        : `<button class="stub-btn" onclick="openBookingModal(${l.id})">${ICONS.swap}Request</button>`
+        : `<button class="stub-btn" onclick="openBookingModal(${jsId(l.id)})">${ICONS.swap}Request</button>`
       }
     </div>
   </div>`;
@@ -783,6 +888,7 @@ function renderHome(){
 }
 
 function renderSwaps(){
+  const inboxHTML = `<div id="ownerInboxList"></div>`;
   if(state.mySwaps.length === 0){
     document.getElementById('screen-swaps').innerHTML = `
       <div class="section-label">My swaps</div>
@@ -791,8 +897,10 @@ function renderSwaps(){
         <h3>No swaps yet</h3>
         <p>Request a bay from Home and it'll show up here with its status.</p>
         <button class="btn btn-outline" onclick="navigate('home')" style="margin-top:6px;">Browse bays</button>
-      </div>`;
+      </div>
+      ${inboxHTML}`;
     saveState();
+    renderOwnerInbox();
     return;
   }
   document.getElementById('screen-swaps').innerHTML = `
@@ -803,12 +911,16 @@ function renderSwaps(){
         const color = declined ? 'var(--meter)' : (s.creditsSettled ? 'var(--signal)' : 'var(--curb)');
         let footer;
         if(!s.creditsSettled){
-          footer = `<div class="demo-note">Prototype only — the real owner would decide this.
-            <span class="sim-link" onclick="ownerApprove(${s.key})">Simulate: owner approves</span> ·
-            <span class="sim-link" onclick="ownerDecline(${s.key})">Simulate: owner declines</span>
-          </div>`;
+          footer = s.remote
+            ? `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.doc} Pending — waiting for the owner to respond.</div>`
+            : `<div class="demo-note">Prototype only — the real owner would decide this.
+                <span class="sim-link" onclick="ownerApprove(${s.key})">Simulate: owner approves</span> ·
+                <span class="sim-link" onclick="ownerDecline(${s.key})">Simulate: owner declines</span>
+              </div>`;
         } else if(declined){
           footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.lock} Owner declined — no credits were charged.</div>`;
+        } else if(s.remote){
+          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> credits charged — confirmed.</div>`;
         } else {
           footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> charged · <b style="color:var(--signal);">+${s.earned}</b> earned${s.hot ? ' (surge)' : ''}</div>`;
         }
@@ -816,21 +928,23 @@ function renderSwaps(){
         <div class="ticket">
           <div class="ticket-main">
             <div class="ticket-row">
-              <span class="bay-number">${s.bay}</span>
+              <span class="bay-number">${escapeHtml(s.bay)}</span>
               <span class="status-dot" style="background:${color}"></span>
               <span class="status-text" style="color:${color}">${s.status}</span>
             </div>
-            <div class="ticket-street">${s.street}</div>
-            <div class="ticket-time">${s.time} · ${s.duration}</div>
-            <div class="ticket-swapper">Swap with <b>${s.owner}</b></div>
+            <div class="ticket-street">${escapeHtml(s.street)}</div>
+            <div class="ticket-time">${s.time ? s.time + ' · ' : ''}${s.duration}</div>
+            <div class="ticket-swapper">Swap with <b>${escapeHtml(s.owner)}</b></div>
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
             ${footer}
           </div>
           <div class="ticket-stub"><div class="stub-btn locked-stub">${ICONS.check}Sent</div></div>
         </div>`;
       }).join('')}
-    </div>`;
+    </div>
+    ${inboxHTML}`;
   saveState();
+  renderOwnerInbox();
 }
 
 function openBookingModal(id){
@@ -885,11 +999,31 @@ function renderBookingModal(){
   `;
 }
 
-function submitBooking(){
+async function submitBooking(){
   const l = listings.find(x => x.id === bookingDraft.listingId);
   const cost = bookingCost(l);
   if(user.credits < cost) return;
   const hot = isHot(l), near = isNear(l);
+
+  if(backendReady && session){
+    const durationHours = parseInt(bookingDraft.duration, 10) || 1;
+    closeBookingModal();
+    try{
+      const { data, error } = await sb.rpc('request_swap', { p_listing_id: l.id, p_duration_hours: durationHours });
+      if(error) throw error;
+      const confirmedNow = data && data.status === 'confirmed';
+      showToast(confirmedNow
+        ? `Booked — ${cost} credits charged instantly (Swap Plus)`
+        : `Request sent — you'll be charged ${cost} credits only if the owner approves`, 5000);
+    } catch(e){
+      showToast(`Couldn't send that request: ${e.message || e}`, 5000);
+    }
+    await refreshBackendData();
+    navigate('swaps');
+    return;
+  }
+
+  // Local demo mode (no backend / not signed in): simulate as before.
   const confirmedNow = state.isPlus;
   const entry = {
     ...l, duration: bookingDraft.duration, hot, near, cost, earned: creditsFor(l),
@@ -932,6 +1066,10 @@ function settleSwap(entry, approved){
   if(document.getElementById('appShell').style.display !== 'none') renderAccount();
 }
 
+// Local-demo-only fallback (no backend / not signed in) — kept so the
+// prototype still fully demos offline, exactly as it did before the backend
+// existed. When a real session is active, real owner decisions come through
+// approveRequest()/declineRequest() below instead.
 function ownerApprove(key){
   const s = state.mySwaps.find(x => x.key === key);
   if(!s || s.creditsSettled) return;
@@ -948,6 +1086,75 @@ function ownerDecline(key){
   settleSwap(s, false);
   showToast('Owner declined — no credits were charged', 5000);
   renderSwaps();
+}
+
+/* ---------------- real owner inbox — approve/decline requests on YOUR listings ---------------- */
+
+let ownerInboxRequests = [];
+
+async function fetchOwnerInbox(){
+  if(!(backendReady && session)) { ownerInboxRequests = []; return; }
+  try{
+    const { data, error } = await sb.rpc('my_listing_requests');
+    if(error) throw error;
+    ownerInboxRequests = data || [];
+  } catch(e){
+    console.warn('fetchOwnerInbox failed', e);
+    ownerInboxRequests = [];
+  }
+}
+
+async function approveRequest(requestId){
+  try{
+    const { error } = await sb.rpc('approve_swap_request', { p_request_id: requestId });
+    if(error) throw error;
+    showToast('Approved — credits moved to your wallet');
+  } catch(e){
+    showToast(`Couldn't approve: ${e.message || e}`, 5000);
+  }
+  await refreshBackendData();
+}
+
+async function declineRequest(requestId){
+  try{
+    const { error } = await sb.rpc('decline_swap_request', { p_request_id: requestId });
+    if(error) throw error;
+    showToast('Declined — no credits were charged');
+  } catch(e){
+    showToast(`Couldn't decline: ${e.message || e}`, 5000);
+  }
+  await refreshBackendData();
+}
+
+function renderOwnerInbox(){
+  const el = document.getElementById('ownerInboxList');
+  if(!el) return;
+  if(!(backendReady && session) || ownerInboxRequests.length === 0){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <div class="section-label" style="margin-top:8px;">Requests on your listings</div>
+    <div class="ticket-list">
+      ${ownerInboxRequests.map(r => `
+        <div class="ticket">
+          <div class="ticket-main">
+            <div class="ticket-row">
+              <span class="bay-number">${escapeHtml(r.bay_number)}</span>
+              <span class="status-dot" style="background:${r.status==='pending'?'var(--curb)':(r.status==='confirmed'?'var(--signal)':'var(--meter)')}"></span>
+              <span class="status-text" style="color:${r.status==='pending'?'var(--curb)':(r.status==='confirmed'?'var(--signal)':'var(--meter)')}">${r.status}</span>
+            </div>
+            <div class="ticket-street">${escapeHtml(r.street)}</div>
+            <div class="ticket-swapper">Request from <b>${escapeHtml(r.requester_name)}</b> · ${r.duration_hours}h</div>
+            <div class="cost-line ${r.is_hot?'premium':''}">${ICONS.coin}<b>${r.cost_credits} credits</b>${r.is_hot?' · surge':''}</div>
+            ${r.status === 'pending' ? `
+              <div class="demo-note">
+                <span class="sim-link" onclick="approveRequest('${r.id}')">Approve</span> ·
+                <span class="sim-link" onclick="declineRequest('${r.id}')">Decline</span>
+              </div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
 }
 
 function addCredits(amount, label){
@@ -987,6 +1194,76 @@ function loadState(){
     }
     return true;
   } catch(e){ return false; }
+}
+
+/* ---------------- real backend data — auth, wallet, swaps ---------------- */
+
+// Pulls "requests I've sent" via the my_swap_requests() RPC (SECURITY
+// DEFINER, same reasoning as browse_listings() — RLS on swap_requests only
+// lets you see rows you're the requester or the listing owner on, so this
+// is a safe single-call way to get your own requests joined with listing +
+// owner info without a client-side join RLS would otherwise block).
+async function fetchMySwaps(){
+  if(!(backendReady && session)) return;
+  try{
+    const { data, error } = await sb.rpc('my_swap_requests');
+    if(error) throw error;
+    state.mySwaps = (data || []).map(row => ({
+      remote: true,
+      id: row.id,
+      bay: row.bay_number,
+      street: row.street,
+      time: '',
+      duration: `${row.duration_hours} hour${row.duration_hours>1?'s':''}`,
+      owner: row.owner_name,
+      cost: row.cost_credits,
+      hot: row.is_hot,
+      near: row.is_near,
+      status: row.status === 'pending' ? 'Pending owner review' : row.status === 'confirmed' ? 'Confirmed' : row.status === 'declined' ? 'Declined' : row.status,
+      creditsSettled: row.status !== 'pending',
+    }));
+  } catch(e){ console.warn('fetchMySwaps failed', e); }
+}
+
+// Wallet balance + recent ledger entries — RLS limits both to the caller's
+// own rows, so no server-side filtering needed beyond the standard select.
+async function fetchWallet(){
+  if(!(backendReady && session)) return;
+  try{
+    const uid = session.user.id;
+    const [{ data: wallet }, { data: ledger }] = await Promise.all([
+      sb.from('wallets').select('credits').eq('user_id', uid).maybeSingle(),
+      sb.from('credit_ledger').select('delta, reason, created_at').eq('user_id', uid).order('created_at', { ascending:false }).limit(10),
+    ]);
+    if(wallet) user.credits = wallet.credits;
+    if(ledger){
+      const REASON_LABEL = {
+        signup_bonus:'Sign-up bonus', plus_welcome:'Swap Plus welcome credits', plus_monthly:'Swap Plus monthly credits',
+        plus_expiry:'Monthly credits expired unused', booking_charge:'Booking cost', booking_earning:'Swap earnings', booking_refund:'Booking refund',
+      };
+      user.creditLog = ledger.map(row => ({ label: REASON_LABEL[row.reason] || row.reason, amount: row.delta }));
+    }
+  } catch(e){ console.warn('fetchWallet failed', e); }
+}
+
+async function fetchProfile(){
+  if(!(backendReady && session)) return;
+  try{
+    const { data } = await sb.from('profiles').select('display_name, verification_status').eq('id', session.user.id).maybeSingle();
+    if(data){
+      user.name = data.display_name || user.name;
+      user.verification = data.verification_status; // 'unverified' | 'pending' | 'verified'
+    }
+  } catch(e){ console.warn('fetchProfile failed', e); }
+}
+
+// One-stop refresh: called after sign-in, after any swap/listing action, and
+// on page load once a session is confirmed. Keeps `listings`, `user`,
+// `state.mySwaps`, and `ownerInboxRequests` in sync with the real backend.
+async function refreshBackendData(){
+  if(!(backendReady && session)) return;
+  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox()]);
+  refreshAll();
 }
 
 /* ---------------- Swap Plus monthly credit allowance ---------------- */
@@ -1069,7 +1346,7 @@ function renderMap(){
     const color = l.priority ? '--plus' : '--signal';
     const hot = isHot(l);
     return `
-      <g class="pin" onclick="${inRange ? `showPin(${l.id})` : ''}" style="cursor:${inRange?'pointer':'default'}; opacity:${inRange?1:0.25};">
+      <g class="pin" onclick="${inRange ? `showPin(${jsId(l.id)})` : ''}" style="cursor:${inRange?'pointer':'default'}; opacity:${inRange?1:0.25};">
         ${hot ? `<circle class="pin-pulse" cx="${x}" cy="${y}" r="6" fill="var(--meter)" opacity="0.6" pointer-events="none"/>` : ''}
         <circle cx="${x}" cy="${y}" r="14" fill="var(${hot?'--meter':color})" opacity="0.22"/>
         <circle cx="${x}" cy="${y}" r="6.5" fill="var(${hot?'--meter':color})" stroke="var(--asphalt)" stroke-width="2"/>
@@ -1131,16 +1408,17 @@ function seededRand(seed){
 }
 
 function bayPhotoSVG(l){
-  const rand = seededRand(l.id * 977 + 13);
+  const seed = hashId(l.id);
+  const rand = seededRand(seed * 977 + 13);
   const code = l.bay.replace('BAY ', '');
   const tones = ['#2A2E33', '#2C3239', '#282D31'];
-  const bg = tones[l.id % tones.length];
+  const bg = tones[seed % tones.length];
   const speckles = Array.from({length: 10}, () => {
     const x = 20 + rand()*360, y = 20 + rand()*220, r = 1 + rand()*2, o = 0.05 + rand()*0.1;
     return `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" fill="#000" opacity="${o.toFixed(2)}"/>`;
   }).join('');
 
-  const bracketStyle = l.id % 2 === 0;
+  const bracketStyle = seed % 2 === 0;
   const markings = bracketStyle ? `
     <rect x="66" y="36" width="268" height="188" rx="3" fill="none" stroke="#F6F4EC" stroke-width="7" opacity="0.92"/>
     <text x="200" y="150" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="52" fill="#F6F4EC" opacity="0.85">${code}</text>
@@ -1174,14 +1452,90 @@ function openBayPhoto(id){
   document.getElementById('bayPhotoTitle').textContent = `${l.bay} · ${l.street}`;
   document.getElementById('bayPhotoBody').innerHTML = `
     <div class="bay-photo-frame">${bayPhotoSVG(l)}</div>
-    <div class="bay-photo-caption">Uploaded by <b>${l.owner}</b> during verification, showing the empty bay before it's swapped. <span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span></div>
-    <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${l.id});">Request this bay</button>
+    <div class="bay-photo-caption">Uploaded by <b>${l.owner}</b> during verification, showing the empty bay before it's swapped. ${l.ownerVerified === false ? '' : `<span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span>`}</div>
+    <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${jsId(l.id)});">Request this bay</button>
   `;
   document.getElementById('bayPhotoModal').classList.add('show');
 }
 
 function closeBayPhoto(){
   document.getElementById('bayPhotoModal').classList.remove('show');
+}
+
+/* ---------------- list a bay (real listings.insert — the trigger in schema.sql rejects unverified owners) ---------------- */
+
+function openListingModal(){
+  if(!(backendReady && session)){
+    showToast(backendReady ? 'Sign in first to list a bay' : "Listing a bay needs a live backend connection", 4000);
+    return;
+  }
+  const now = new Date();
+  const startDefault = new Date(now.getTime() + 60*60*1000);
+  const endDefault = new Date(now.getTime() + 5*60*60*1000);
+  const toLocalInput = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  document.getElementById('listingModalBody').innerHTML = `
+    <div class="field"><label>Bay number</label><input type="text" id="lstBay" placeholder="BAY 14A"></div>
+    <div class="field"><label>Street</label><input type="text" id="lstStreet" placeholder="Shoreditch High St"></div>
+    <div class="field"><label>Area</label><input type="text" id="lstArea" placeholder="Shoreditch, London"></div>
+    <div class="field"><label>Available from</label><input type="datetime-local" id="lstStart" value="${toLocalInput(startDefault)}"></div>
+    <div class="field"><label>Available until</label><input type="datetime-local" id="lstEnd" value="${toLocalInput(endDefault)}"></div>
+    ${state.isPlus ? `<div class="tc-agree"><input type="checkbox" id="lstPriority"><label for="lstPriority">Swap Plus priority only</label></div>` : ''}
+    <div class="ob-sub" id="lstError" style="color:var(--meter); margin-top:8px;"></div>
+    <button class="btn btn-plus btn-block" style="margin-top:12px;" onclick="submitListing()">List this bay</button>
+    <div class="demo-note" style="margin-top:10px;">Only verified owners can list — this goes to a real table, and the backend rejects it if your bay verification isn't approved yet.</div>
+  `;
+  document.getElementById('listingModal').classList.add('show');
+}
+
+function closeListingModal(){
+  document.getElementById('listingModal').classList.remove('show');
+}
+
+async function submitListing(){
+  const bay = document.getElementById('lstBay').value.trim();
+  const street = document.getElementById('lstStreet').value.trim();
+  const area = document.getElementById('lstArea').value.trim();
+  const start = document.getElementById('lstStart').value;
+  const end = document.getElementById('lstEnd').value;
+  const priorityEl = document.getElementById('lstPriority');
+  const errEl = document.getElementById('lstError');
+  errEl.textContent = '';
+  if(!bay || !street || !area || !start || !end){ errEl.textContent = 'Fill in every field.'; return; }
+  if(new Date(end) <= new Date(start)){ errEl.textContent = 'End time must be after the start time.'; return; }
+  try{
+    const { error } = await sb.from('listings').insert({
+      owner_id: session.user.id,
+      bay_number: bay,
+      street: street,
+      area: area,
+      available_start: new Date(start).toISOString(),
+      available_end: new Date(end).toISOString(),
+      priority_only: !!(priorityEl && priorityEl.checked),
+      status: 'active',
+    });
+    if(error) throw error;
+    closeListingModal();
+    showToast('Bay listed — it now shows up in the feed', 5000);
+    await refreshBackendData();
+    navigate('home');
+  } catch(e){
+    errEl.textContent = e.message || 'Could not list this bay.';
+  }
+}
+
+async function signOut(){
+  if(!(backendReady && sb)) return;
+  await sb.auth.signOut();
+  session = null;
+  user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
+  state.mySwaps = [];
+  ownerInboxRequests = [];
+  listings = LOCAL_DEMO_LISTINGS.map(l => ({...l}));
+  try{ localStorage.removeItem(STORAGE_KEY); } catch(e){}
+  document.getElementById('appShell').style.display = 'none';
+  obStep = 1; obMode = 'signup'; awaitingConfirmation = false;
+  document.getElementById('onboarding').style.display = 'flex';
+  renderOnboarding();
 }
 
 function showPin(id){
@@ -1194,12 +1548,12 @@ function showPin(id){
   const premium = near || hot;
   pop.innerHTML = `
     <div class="pin-popover-top">
-      <button class="ticket-street-link" style="font-size:14px;" onclick="openBayPhoto(${l.id})">${l.bay} · ${l.street}${ICONS.camera}</button>
+      <button class="ticket-street-link" style="font-size:14px;" onclick="openBayPhoto(${jsId(l.id)})">${l.bay} · ${l.street}${ICONS.camera}</button>
       <span class="watchers ${hot?'hot':''}">${hot?ICONS.flame:ICONS.person}<span>${l.offers} offer${l.offers===1?'':'s'}</span></span>
     </div>
     <div class="ticket-time" style="margin-bottom:6px;">${l.time} · ${l.mi} mi away</div>
     <div class="cost-line ${premium?'premium':''}" style="margin:0 0 10px;">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
-    <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${l.id})">Request this bay</button>
+    <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${jsId(l.id)})">Request this bay</button>
   `;
   pop.classList.add('show');
 }
@@ -1213,6 +1567,32 @@ function renderOnboarding(){
   const body = document.getElementById('obBody');
   const footer = document.getElementById('obFooter');
 
+  if(awaitingConfirmation){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Almost there</div>
+      <div class="ob-title">Confirm your email</div>
+      <div class="ob-sub">We've sent a confirmation link to <b>${escapeHtml(user.email)}</b>. Click it, then come back and sign in.</div>
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" onclick="awaitingConfirmation=false; obMode='signin'; obStep=1; renderOnboarding();">I've confirmed — sign in</button>
+      <button class="ob-skip" onclick="awaitingConfirmation=false; obMode='signup'; obStep=1; renderOnboarding();">Back</button>`;
+    return;
+  }
+
+  if(obStep === 1 && obMode === 'signin'){
+    body.innerHTML = `
+      <div class="ob-eyebrow">Welcome back</div>
+      <div class="ob-title">Sign in</div>
+      <div class="ob-sub">Use the email and password from your SwapSpot account.</div>
+      <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
+      <div class="field"><label>Password</label><input type="password" id="obPassword" placeholder="••••••••" oninput="onObField()"></div>
+      <div class="ob-sub" id="obAuthError" style="color:var(--meter);"></div>
+    `;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="signInExisting()" disabled>Sign in</button>
+      <button class="ob-skip" onclick="obMode='signup'; renderOnboarding();">New here? Create an account</button>`;
+    onObField();
+    return;
+  }
+
   if(obStep === 1){
     body.innerHTML = `
       <div class="ob-eyebrow">Step 1 of ${OB_TOTAL}</div>
@@ -1220,8 +1600,11 @@ function renderOnboarding(){
       <div class="ob-sub">Just enough to get you started — you'll prove your parking spot next.</div>
       <div class="field"><label>Full name</label><input type="text" id="obName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onObField()"></div>
       <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
+      ${backendReady ? `<div class="field"><label>Password</label><input type="password" id="obPassword" placeholder="At least 6 characters" oninput="onObField()"></div>` : ''}
+      <div class="ob-sub" id="obAuthError" style="color:var(--meter);"></div>
     `;
-    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="obNext()" disabled>Continue</button>`;
+    footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="obNext()" disabled>Continue</button>
+      ${backendReady ? `<button class="ob-skip" onclick="obMode='signin'; renderOnboarding();">Already have an account? Sign in</button>` : ''}`;
     onObField();
   }
 
@@ -1292,13 +1675,39 @@ function initials(name){
 function onObField(){
   const btn = document.getElementById('obNextBtn');
   if(!btn) return;
-  if(obStep === 1){
+  if(obStep === 1 && obMode === 'signin'){
+    const email = document.getElementById('obEmail')?.value.trim();
+    const password = document.getElementById('obPassword')?.value || '';
+    btn.disabled = !(email && email.includes('@') && password.length > 0);
+  } else if(obStep === 1){
     const name = document.getElementById('obName')?.value.trim();
     const email = document.getElementById('obEmail')?.value.trim();
-    btn.disabled = !(name && email.includes('@'));
+    const password = document.getElementById('obPassword')?.value || '';
+    const passwordOk = !backendReady || password.length >= 6;
+    btn.disabled = !(name && email.includes('@') && passwordOk);
   }
   if(obStep === 4){
     btn.disabled = !document.getElementById('tcCheck')?.checked;
+  }
+}
+
+async function signInExisting(){
+  const email = document.getElementById('obEmail').value.trim();
+  const password = document.getElementById('obPassword').value;
+  const errEl = document.getElementById('obAuthError');
+  if(errEl) errEl.textContent = '';
+  if(!backendReady){ if(errEl) errEl.textContent = 'Sign-in needs a live backend connection.'; return; }
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    session = data.session;
+    user.email = email;
+    document.getElementById('onboarding').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    await refreshBackendData();
+    showToast(`Welcome back${user.name ? ', ' + user.name.split(' ')[0] : ''}`, 4000);
+  } catch(e){
+    if(errEl) errEl.textContent = e.message || 'Could not sign in.';
   }
 }
 
@@ -1316,13 +1725,40 @@ function obNext(){
   if(obStep === 1){
     user.name = document.getElementById('obName').value.trim();
     user.email = document.getElementById('obEmail').value.trim();
+    obPassword = document.getElementById('obPassword')?.value || '';
   }
   obStep = Math.min(obStep + 1, OB_TOTAL);
   renderOnboarding();
   document.getElementById('obBody').scrollTop = 0;
 }
 
-function finishOnboarding(){
+async function finishOnboarding(){
+  if(backendReady){
+    try{
+      const { data, error } = await sb.auth.signUp({
+        email: user.email,
+        password: obPassword,
+        options: { data: { display_name: user.name } }
+      });
+      if(error) throw error;
+      obPassword = '';
+      if(data.session){
+        session = data.session;
+        document.getElementById('onboarding').style.display = 'none';
+        document.getElementById('appShell').style.display = 'flex';
+        await refreshBackendData();
+        showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'} — 5 free credits are in your account`, 5000);
+      } else {
+        // Email confirmation is required on this project — no session yet.
+        awaitingConfirmation = true;
+        renderOnboarding();
+      }
+      return;
+    } catch(e){
+      showToast(`Couldn't create your account: ${e.message || e} — continuing in local demo mode instead`, 6000);
+      // fall through to local-only demo behaviour below
+    }
+  }
   document.getElementById('onboarding').style.display = 'none';
   document.getElementById('appShell').style.display = 'flex';
   user.credits = 5;
@@ -1351,12 +1787,35 @@ function onBillChosen(e){
   const file = e.target.files[0];
   if(!file) return;
   const isImage = file.type.startsWith('image/');
+
+  if(backendReady && session){
+    user.bill = { name:file.name, dataUrl:null, isPdf:!isImage, uploading:true };
+    rerenderVerifyContext();
+    const path = `${session.user.id}/${Date.now()}-${file.name}`;
+    sb.storage.from('bay-photos').upload(path, file)
+      .then(({ error }) => {
+        if(error) throw error;
+        user.bill = { name:file.name, dataUrl:null, isPdf:!isImage, uploading:false };
+        user.verification = 'pending'; // local UI hint only — the real record lives in profiles.verification_status, reviewed by hand
+        showToast('Uploaded — a real reviewer needs to verify this before your listings show a badge', 5000);
+        rerenderVerifyContext();
+      })
+      .catch(err => {
+        user.bill = null;
+        showToast(`Upload failed: ${err.message || err}`, 5000);
+        rerenderVerifyContext();
+      });
+    return;
+  }
+
+  // Local demo mode: no backend, so just fake it as before.
+  const isImageLocal = isImage;
   const finish = (dataUrl) => {
-    user.bill = { name:file.name, dataUrl: isImage ? dataUrl : null, isPdf: !isImage };
+    user.bill = { name:file.name, dataUrl: isImageLocal ? dataUrl : null, isPdf: !isImageLocal };
     user.verification = 'pending';
     rerenderVerifyContext();
   };
-  if(isImage){
+  if(isImageLocal){
     const reader = new FileReader();
     reader.onload = ev => finish(ev.target.result);
     reader.readAsDataURL(file);
@@ -1384,6 +1843,7 @@ function rerenderVerifyContext(){
 }
 
 function renderVerifyBlock(){
+  const live = backendReady && session;
   if(user.verification === 'unverified'){
     return `
       <div class="dropzone" onclick="triggerBillUpload()">
@@ -1395,7 +1855,7 @@ function renderVerifyBlock(){
   const fileRow = user.bill ? `
     <div class="file-chip">
       ${user.bill.dataUrl ? `<img class="thumb" src="${user.bill.dataUrl}">` : `<div class="thumb doc">${ICONS.doc}</div>`}
-      <span class="fname">${user.bill.name}</span>
+      <span class="fname">${escapeHtml(user.bill.name)}${user.bill.uploading ? ' · uploading…' : ''}</span>
       <button class="fremove" onclick="removeBill()">✕</button>
     </div>` : '';
 
@@ -1404,9 +1864,9 @@ function renderVerifyBlock(){
       ${fileRow}
       <div class="verify-status pending">
         ${ICONS.doc}
-        <div><div class="vs-title">Pending review</div><div class="vs-sub">Usually reviewed within 24 hours</div></div>
+        <div><div class="vs-title">Pending review</div><div class="vs-sub">${live ? "We review submissions by hand — you'll see the verified badge next time you sign in once it's approved" : 'Usually reviewed within 24 hours'}</div></div>
       </div>
-      <div class="demo-note">Prototype only — real review happens on our end. <a href="#" style="color:var(--curb);" onclick="event.preventDefault();simulateApproval()">Simulate approval</a> to preview the verified state.</div>`;
+      ${live ? '' : `<div class="demo-note">Prototype only — real review happens on our end. <a href="#" style="color:var(--curb);" onclick="event.preventDefault();simulateApproval()">Simulate approval</a> to preview the verified state.</div>`}`;
   }
   return `
     ${fileRow}
@@ -1440,6 +1900,22 @@ function renderAccount(){
       <div class="profile-sub">${state.isPlus ? 'Swap Plus member' : 'Basic member'}</div>
     </div>`;
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
+
+  const signOutBtn = document.getElementById('signOutBtn');
+  if(signOutBtn) signOutBtn.style.display = (backendReady && session) ? 'block' : 'none';
+  const listBtn = document.getElementById('listABayBtn');
+  if(listBtn){
+    if(backendReady && session){
+      listBtn.disabled = false;
+      listBtn.textContent = 'List a bay';
+    } else if(backendReady){
+      listBtn.disabled = true;
+      listBtn.textContent = 'List a bay (sign in first)';
+    } else {
+      listBtn.disabled = true;
+      listBtn.textContent = 'List a bay (needs a live backend)';
+    }
+  }
 
   const grant = user.plusGrant;
   const daysLeft = grant.active ? Math.max(0, Math.ceil((grant.expiresAt - Date.now()) / (24*60*60*1000))) : 0;
@@ -1554,14 +2030,34 @@ function startApp(){
   document.getElementById('onboarding').style.display = 'flex';
 }
 
-if(loadState()){
-  document.getElementById('splash').style.display = 'none';
-  document.getElementById('onboarding').style.display = 'none';
-  document.getElementById('appShell').style.display = 'flex';
-  refreshAll();
-} else {
-  renderOnboarding();
+async function initApp(){
+  if(backendReady){
+    try{
+      const { data } = await sb.auth.getSession();
+      if(data && data.session){
+        session = data.session;
+        document.getElementById('splash').style.display = 'none';
+        document.getElementById('onboarding').style.display = 'none';
+        document.getElementById('appShell').style.display = 'flex';
+        await refreshBackendData();
+        return;
+      }
+    } catch(e){ console.warn('getSession failed — falling back to local demo mode', e); }
+    try{
+      sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
+    } catch(e){ /* not critical */ }
+  }
+  if(loadState()){
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('onboarding').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    refreshAll();
+  } else {
+    renderOnboarding();
+  }
 }
+
+initApp();
 </script>
 </body>
 </html>
