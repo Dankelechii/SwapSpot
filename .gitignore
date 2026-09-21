@@ -1,0 +1,7 @@
+# /brag launch-video output — rendered video, poster, and the Hyperframes
+# project with its bundled music, fonts and SFX. Regenerate with /brag.
+brag-output/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
