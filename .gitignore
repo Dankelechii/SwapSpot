@@ -2,6 +2,10 @@
 # project with its bundled music, fonts and SFX. Regenerate with /brag.
 brag-output/
 
+# Local agent/editor tooling — launch config and scratch worktrees,
+# specific to one machine rather than to the project.
+.claude/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
