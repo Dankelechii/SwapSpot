@@ -1,0 +1,17 @@
+name: General feedback
+description: Thoughts on the concept, flow, pricing, or anything that isn't a straight bug.
+title: "[Feedback]: "
+labels: ["feedback"]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What's on your mind?
+      description: Confusing screen, a feature you expected, pricing that felt off, something you loved - all useful.
+    validations:
+      required: true
+  - type: input
+    id: context
+    attributes:
+      label: Device / browser (if relevant)
+
