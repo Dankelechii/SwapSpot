@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SwapSpot — parking, swapped</title>
+<title>SwapSpot: parking, swapped</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -587,9 +587,9 @@
       </svg>
       <div class="splash-word"><span class="w1">Swap</span><span class="w2">Spot</span></div>
       <div class="splash-tag">Parking bays, swapped</div>
-      <div class="splash-pitch">Drivers lending each other their parking spaces. <b>Borrow a bay when you need one, put yours in when you don't</b> — there are only ever as many spaces on the map as members are willing to share.</div>
+      <div class="splash-pitch">Drivers lending each other their parking spaces. <b>Borrow a bay when you need one, put yours in when you don't</b>: there are only ever as many spaces on the map as members are willing to share.</div>
       <button class="btn btn-plus splash-cta" onclick="startApp()">Get started</button>
-      <div class="splash-note">Real backend — accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
+      <div class="splash-note">Real backend: accounts, listings, swap requests and credits are live. Bay verification is reviewed by hand, and payments aren't connected yet.</div>
     </div>
 
     <!-- SPLASH → ONBOARDING INTERSTITIAL -->
@@ -746,7 +746,7 @@
       </div>
     </div>
 
-    <!-- LIST A BAY MODAL (real listings.insert — only succeeds server-side for verified owners) -->
+    <!-- LIST A BAY MODAL (real listings.insert, only succeeds server-side for verified owners) -->
     <div class="modal-overlay" id="listingModal">
       <div class="modal-sheet">
         <div class="modal-head">
@@ -764,7 +764,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ---------------- real backend (Supabase) — degrades to the local demo below if unreachable ---------------- */
+/* ---------------- real backend (Supabase): degrades to the local demo below if unreachable ---------------- */
 const SUPABASE_URL = 'https://woxumfxyghqpesooobjq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_UhT3PuPNRVtF51FPv0XUDA_5m-wf4tX';
 let sb = null;
@@ -775,7 +775,7 @@ try{
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     backendReady = true;
   }
-} catch(e){ console.warn('Supabase client init failed — running in local demo mode', e); }
+} catch(e){ console.warn('Supabase client init failed, running in local demo mode', e); }
 
 const ICONS = {
   swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h13l-3-3.5M20 17H7l3 3.5"/></svg>',
@@ -794,33 +794,33 @@ const ICONS = {
 };
 
 const TERMS_HTML = `
-  <div class="tc-disclaimer">Draft prototype text for demo purposes only — not legal advice. Have a solicitor review and finalise before this goes live. Governed by the laws of England &amp; Wales. Last updated 13 August 2026.</div>
+  <div class="tc-disclaimer">Draft prototype text for demo purposes only: not legal advice. Have a solicitor review and finalise before this goes live. Governed by the laws of England &amp; Wales. Last updated 13 August 2026.</div>
   <h4>1. About these terms</h4>
   <p>These terms are a legally binding agreement between you and Swap Technologies Ltd ("Swap", "we", "us"), a company registered in England and Wales, covering your use of the Swap app (the "Service"). Creating an account means you accept them.</p>
   <h4>2. Eligibility</h4>
   <p>You must be at least 18, hold a valid UK driving licence or otherwise be entitled to use or authorise use of a parking bay, and give us accurate registration details.</p>
   <h4>3. Your account</h4>
-  <p>You agree to give true, current, complete information when you register, including your name, a profile photo, and evidence of your right to any bay you list. Keep this up to date — we may suspend or close accounts where information turns out to be false or misleading.</p>
+  <p>You agree to give true, current, complete information when you register, including your name, a profile photo, and evidence of your right to any bay you list. Keep this up to date: we may suspend or close accounts where information turns out to be false or misleading.</p>
   <h4>4. Verifying your right to a bay</h4>
-  <p>Before you list a bay, you must submit a clear, recent photo of the empty bay you intend to lend, so other members can see what they're swapping for. A photo shows what the bay looks like — it doesn't on its own prove you have the right to lend it; that's covered by your declaration in section 5. We review submitted photos and can decline or remove a listing at our reasonable discretion, including where a photo looks reused, doesn't match the listed location, or is otherwise misleading. We don't independently check every listing, and we don't warrant that any bay is genuinely available or lawfully held — you swap with other members at your own risk, subject to section 9.</p>
+  <p>Before you list a bay, you must submit a clear, recent photo of the empty bay you intend to lend, so other members can see what they're swapping for. A photo shows what the bay looks like: it doesn't on its own prove you have the right to lend it; that's covered by your declaration in section 5. We review submitted photos and can decline or remove a listing at our reasonable discretion, including where a photo looks reused, doesn't match the listed location, or is otherwise misleading. We don't independently check every listing, and we don't warrant that any bay is genuinely available or lawfully held: you swap with other members at your own risk, subject to section 9.</p>
   <h4 class="tc-flag">5. Your declaration of ownership and truthfulness</h4>
   <p>By listing, requesting, or accepting a swap, you confirm that: (a) you're the registered permit holder, leaseholder, tenant, or otherwise genuinely entitled to use and to authorise someone else to use the bay for the stated period; (b) everything in your listing is accurate, including that the photo you submit genuinely shows the bay you're listing; and (c) you'll honour any swap you confirm, barring events reasonably beyond your control.</p>
-  <p>Knowingly giving false information about your right to a bay, or submitting a photo that doesn't genuinely show the bay you're listing, to gain a swap or a subscription benefit may amount to a false representation under the Fraud Act 2006, which can carry criminal liability, on top of us closing your account. You agree to cover other members and Swap for reasonably foreseeable losses directly caused by breaching this section — for example, a penalty charge notice, clamping, or towing fee because a bay you listed wasn't genuinely yours to offer.</p>
+  <p>Knowingly giving false information about your right to a bay, or submitting a photo that doesn't genuinely show the bay you're listing, to gain a swap or a subscription benefit may amount to a false representation under the Fraud Act 2006, which can carry criminal liability, on top of us closing your account. You agree to cover other members and Swap for reasonably foreseeable losses directly caused by breaching this section: for example, a penalty charge notice, clamping, or towing fee because a bay you listed wasn't genuinely yours to offer.</p>
   <h4>6. Swap Plus subscription</h4>
-  <p>Swap Plus costs £1.99 a month (inc. VAT where it applies), billed in advance on a recurring basis until you cancel. It gives you the live map of nearby bays and priority queue position on swap requests ahead of Basic members — priority is a queuing benefit only, not a guarantee any particular swap goes through. Cancel any time; your benefits run to the end of the paid period with no further charge, and no partial refunds outside what the law requires. Swap Plus is currently in beta and not yet available to everyone; this section applies once it launches.</p>
+  <p>Swap Plus costs £1.99 a month (inc. VAT where it applies), billed in advance on a recurring basis until you cancel. It gives you the live map of nearby bays and priority queue position on swap requests ahead of Basic members: priority is a queuing benefit only, not a guarantee any particular swap goes through. Cancel any time; your benefits run to the end of the paid period with no further charge, and no partial refunds outside what the law requires. Swap Plus is currently in beta and not yet available to everyone; this section applies once it launches.</p>
   <p>Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, new digital subscriptions normally carry a 14-day cancellation right. Because Swap Plus gives you the live map and priority booking straight away, subscribing means you expressly ask for that immediate access and accept that your cancellation right ends once the service starts, per Regulation 37.</p>
   <h4>7. Acceptable use</h4>
   <p>Don't use the Service to commit fraud, list a bay you have no right to offer, harass or discriminate against other members, post a photo of a bay that isn't yours to lend, or try to get round our verification checks.</p>
   <h4>8. Data protection</h4>
-  <p>We handle your personal data — including your profile photo and bay verification photos — under UK GDPR and the Data Protection Act 2018. Verification photos are used only to confirm what a listed bay looks like, kept only as long as reasonably needed for that and for fraud-prevention record-keeping, then securely deleted. You can ask to access, correct, or erase your data, subject to our legitimate retention needs (e.g. evidence in an active dispute) — see the Privacy Policy for full detail.</p>
+  <p>We handle your personal data (including your profile photo and bay verification photos) under UK GDPR and the Data Protection Act 2018. Verification photos are used only to confirm what a listed bay looks like, kept only as long as reasonably needed for that and for fraud-prevention record-keeping, then securely deleted. You can ask to access, correct, or erase your data, subject to our legitimate retention needs (e.g. evidence in an active dispute): see the Privacy Policy for full detail.</p>
   <h4>9. Liability</h4>
-  <p>We provide the Service with reasonable care and skill, in line with the Consumer Rights Act 2015. Swap is a platform that helps members arrange swaps directly with each other — we're not a party to, and don't guarantee, any swap arrangement. To the extent the law allows, we're not liable for losses from another member's bay not genuinely being available, or for parking charges, penalty notices, clamping, towing, or vehicle damage arising from a swap. Nothing here limits liability for death, personal injury caused by negligence, or fraud, which English law doesn't let us exclude.</p>
+  <p>We provide the Service with reasonable care and skill, in line with the Consumer Rights Act 2015. Swap is a platform that helps members arrange swaps directly with each other: we're not a party to, and don't guarantee, any swap arrangement. To the extent the law allows, we're not liable for losses from another member's bay not genuinely being available, or for parking charges, penalty notices, clamping, towing, or vehicle damage arising from a swap. Nothing here limits liability for death, personal injury caused by negligence, or fraud, which English law doesn't let us exclude.</p>
   <h4>10. Suspension and termination</h4>
-  <p>We can suspend or close your account, with notice where reasonably possible, if you breach these terms — particularly section 5 — or fail verification.</p>
+  <p>We can suspend or close your account, with notice where reasonably possible, if you breach these terms (particularly section 5), or fail verification.</p>
   <h4>11. Complaints</h4>
-  <p>Unhappy with something? Contact support@swapapp.example first — we aim to resolve complaints within 14 days. UK residents may also be entitled to use an alternative dispute resolution provider.</p>
+  <p>Unhappy with something? Contact support@swapapp.example first: we aim to resolve complaints within 14 days. UK residents may also be entitled to use an alternative dispute resolution provider.</p>
   <h4>12. Governing law</h4>
-  <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction — if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
+  <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction: if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
 `;
 
 const LOCAL_DEMO_LISTINGS = [
@@ -848,10 +848,10 @@ function haversineMiles(lat1, lng1, lat2, lng2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// UUIDs can't be dropped straight into an inline onclick="fn(${id})" — this
+// UUIDs can't be dropped straight into an inline onclick="fn(${id})": this
 // renders the right JS literal (quoted string vs bare number) for either.
 function jsId(id){ return typeof id === 'string' ? `'${id.replace(/'/g,"\\'")}'` : id; }
-// bayPhotoSVG()'s illustration is procedurally seeded from a numeric id —
+// bayPhotoSVG()'s illustration is procedurally seeded from a numeric id: 
 // this turns a uuid into a stable number so real listings still get one.
 function hashId(id){
   if(typeof id === 'number') return id;
@@ -874,7 +874,7 @@ function formatTimeRange(startISO, endISO){
 }
 
 // Pulls the browsable feed from the real backend via the browse_listings()
-// RPC (a SECURITY DEFINER function — see supabase/schema.sql — because RLS
+// RPC (a SECURITY DEFINER function, see supabase/schema.sql, because RLS
 // on swap_requests correctly hides individual requests from other members,
 // so the per-listing offer count has to come from a server-side aggregate,
 // not a client-side count() a browsing user isn't allowed to run).
@@ -900,7 +900,7 @@ async function fetchListings(){
     });
     return true;
   } catch(e){
-    console.warn('fetchListings failed — keeping local demo listings', e);
+    console.warn('fetchListings failed, keeping local demo listings', e);
     return false;
   }
 }
@@ -936,7 +936,7 @@ function costReason(l){
   const near = isNear(l), hot = isHot(l);
   if(near && hot) return `Within ${NEAR_METRES}m of your search, and ${HOT_THRESHOLD}+ members have offered on it`;
   if(near) return `Within ${NEAR_METRES}m of your search`;
-  if(hot) return `Surge — ${HOT_THRESHOLD}+ members have offered on this bay`;
+  if(hot) return `Surge: ${HOT_THRESHOLD}+ members have offered on this bay`;
   return `Further than ${NEAR_METRES}m and under ${HOT_THRESHOLD} offers`;
 }
 
@@ -992,7 +992,7 @@ function renderHome(){
       <div class="empty-state">
         ${ICONS.car}
         <h3>No one's lending this close</h3>
-        <p>Nobody within ${radiusLabel} of Shoreditch has put a bay in right now. Try a wider radius — or be the one who lends.</p>
+        <p>Nobody within ${radiusLabel} of Shoreditch has put a bay in right now. Try a wider radius: or be the one who lends.</p>
         <button class="btn btn-outline" onclick="lendMyBay()" style="margin-top:6px;">Lend my bay</button>
       </div>`;
     return;
@@ -1002,7 +1002,7 @@ function renderHome(){
   listEl.innerHTML = `
     <div class="community-card">
       <div class="cc-head">${ICONS.car}<span><b>${inRange.length} bay${inRange.length===1?'':'s'}</b> lent by <b>${lenders} neighbour${lenders===1?'':'s'}</b> within ${radiusLabel}</span></div>
-      <div class="cc-body">Every space below belongs to a driver who needs one themselves. <b>Put your bay in when you're not using it</b> — the map only has what members are willing to share.</div>
+      <div class="cc-body">Every space below belongs to a driver who needs one themselves. <b>Put your bay in when you're not using it</b>: the map only has what members are willing to share.</div>
       <button class="btn btn-outline btn-block" onclick="lendMyBay()">Lend my bay</button>
     </div>` + inRange.map(l => ticketCard(l)).join('');
 }
@@ -1015,7 +1015,7 @@ function renderSwaps(){
       <div class="empty-state">
         ${ICONS.car}
         <h3>No swaps yet</h3>
-        <p>Borrow a bay a neighbour has lent, and it'll show up here with its status. Lend yours back when you can — that's what keeps spaces on the map.</p>
+        <p>Borrow a bay a neighbour has lent, and it'll show up here with its status. Lend yours back when you can: that's what keeps spaces on the map.</p>
         <button class="btn btn-outline" onclick="navigate('home')" style="margin-top:6px;">See what's being lent</button>
       </div>
       ${inboxHTML}`;
@@ -1032,15 +1032,15 @@ function renderSwaps(){
         let footer;
         if(!s.creditsSettled){
           footer = s.remote
-            ? `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.doc} Pending — waiting for the owner to respond.</div>`
-            : `<div class="demo-note">Prototype only — the real owner would decide this.
+            ? `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.doc} Pending: waiting for the owner to respond.</div>`
+            : `<div class="demo-note">Prototype only: the real owner would decide this.
                 <span class="sim-link" onclick="ownerApprove(${s.key})">Simulate: owner approves</span> ·
                 <span class="sim-link" onclick="ownerDecline(${s.key})">Simulate: owner declines</span>
               </div>`;
         } else if(declined){
-          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.lock} Owner declined — no credits were charged.</div>`;
+          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.lock} Owner declined: no credits were charged.</div>`;
         } else if(s.remote){
-          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> credits charged — confirmed.</div>`;
+          footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> credits charged: confirmed.</div>`;
         } else {
           footer = `<div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">${ICONS.coin} <b style="color:var(--meter);">-${s.cost}</b> charged · <b style="color:var(--signal);">+${s.earned}</b> earned${s.hot ? ' (surge)' : ''}</div>`;
         }
@@ -1071,7 +1071,7 @@ function openBookingModal(id){
   const l = listings.find(x => x.id === id);
   if(!l) return;
   if(l.priority && !state.isPlus){
-    showToast('This bay is reserved for Swap Plus — coming soon in beta', 5000);
+    showToast('This bay is reserved for Swap Plus, coming soon in beta', 5000);
     return;
   }
   bookingDraft = { listingId: id, duration: DURATION_OPTIONS[0] };
@@ -1110,12 +1110,12 @@ function renderBookingModal(){
       ${premium ? `<span class="surge-tag">${ICONS.flame}Premium</span>` : ''}
     </div>
 
-    <div class="balance-line ${enough?'':'insufficient'}">You have <b>${user.credits} credits</b>${enough ? '' : ` — need ${cost - user.credits} more`}</div>
+    <div class="balance-line ${enough?'':'insufficient'}">You have <b>${user.credits} credits</b>${enough ? '' : `: need ${cost - user.credits} more`}</div>
 
     <button class="btn btn-plus btn-block" style="margin-top:12px;" ${enough?'':'disabled'} onclick="submitBooking()">
-      ${state.isPlus ? `Book now — ${cost} credits` : `Send request — ${cost} credits`}
+      ${state.isPlus ? `Book now · ${cost} credits` : `Send request · ${cost} credits`}
     </button>
-    <div class="demo-note" style="margin-top:10px;">${state.isPlus ? "Plus gets instant book — the owner has pre-approved priority requests." : "The owner reviews requests and can accept or decline. You're only charged if they approve."}</div>
+    <div class="demo-note" style="margin-top:10px;">${state.isPlus ? "Plus gets instant book: the owner has pre-approved priority requests." : "The owner reviews requests and can accept or decline. You're only charged if they approve."}</div>
   `;
 }
 
@@ -1133,8 +1133,8 @@ async function submitBooking(){
       if(error) throw error;
       const confirmedNow = data && data.status === 'confirmed';
       showToast(confirmedNow
-        ? `Booked — ${cost} credits charged instantly (Swap Plus)`
-        : `Request sent — you'll be charged ${cost} credits only if the owner approves`, 5000);
+        ? `Booked: ${cost} credits charged instantly (Swap Plus)`
+        : `Request sent: you'll be charged ${cost} credits only if the owner approves`, 5000);
     } catch(e){
       showToast(`Couldn't send that request: ${e.message || e}`, 5000);
     }
@@ -1147,20 +1147,20 @@ async function submitBooking(){
   const confirmedNow = state.isPlus;
   const entry = {
     ...l, duration: bookingDraft.duration, hot, near, cost, earned: creditsFor(l),
-    status: confirmedNow ? 'Confirmed — instant book' : 'Pending owner review',
+    status: confirmedNow ? 'Confirmed: instant book' : 'Pending owner review',
     creditsSettled: false, key: swapKeyCounter++
   };
   state.mySwaps.unshift(entry);
   closeBookingModal();
   if(confirmedNow) settleSwap(entry, true);
 
-  // your request counts as an offer on this bay — added after locking in this request's own price
+  // your request counts as an offer on this bay: added after locking in this request's own price
   l.offers = Math.min(9, l.offers + 1);
   updateOfferBadges();
 
   showToast(confirmedNow
-    ? `Booked — ${cost} credits charged, ${entry.earned} earned${hot ? ' (surge)' : ''}`
-    : `Request sent — you'll be charged ${cost} credits only if the owner approves`, 5000);
+    ? `Booked: ${cost} credits charged, ${entry.earned} earned${hot ? ' (surge)' : ''}`
+    : `Request sent: you'll be charged ${cost} credits only if the owner approves`, 5000);
   navigate('swaps');
 }
 
@@ -1186,7 +1186,7 @@ function settleSwap(entry, approved){
   if(document.getElementById('appShell').style.display !== 'none') renderAccount();
 }
 
-// Local-demo-only fallback (no backend / not signed in) — kept so the
+// Local-demo-only fallback (no backend / not signed in): kept so the
 // prototype still fully demos offline, exactly as it did before the backend
 // existed. When a real session is active, real owner decisions come through
 // approveRequest()/declineRequest() below instead.
@@ -1195,8 +1195,8 @@ function ownerApprove(key){
   if(!s || s.creditsSettled) return;
   settleSwap(s, true);
   showToast(s.status === 'Declined'
-    ? "Not enough credits to complete this booking — it's lapsed"
-    : `Owner approved — ${s.cost} credits charged, ${s.earned} earned${s.hot ? ' (surge)' : ''}`, 5000);
+    ? "Not enough credits to complete this booking: it's lapsed"
+    : `Owner approved: ${s.cost} credits charged, ${s.earned} earned${s.hot ? ' (surge)' : ''}`, 5000);
   renderSwaps();
 }
 
@@ -1204,11 +1204,11 @@ function ownerDecline(key){
   const s = state.mySwaps.find(x => x.key === key);
   if(!s || s.creditsSettled) return;
   settleSwap(s, false);
-  showToast('Owner declined — no credits were charged', 5000);
+  showToast('Owner declined, no credits were charged', 5000);
   renderSwaps();
 }
 
-/* ---------------- real owner inbox — approve/decline requests on YOUR listings ---------------- */
+/* ---------------- real owner inbox: approve/decline requests on YOUR listings ---------------- */
 
 let ownerInboxRequests = [];
 
@@ -1228,7 +1228,7 @@ async function approveRequest(requestId){
   try{
     const { error } = await sb.rpc('approve_swap_request', { p_request_id: requestId });
     if(error) throw error;
-    showToast('Approved — credits moved to your wallet');
+    showToast('Approved, credits moved to your wallet');
   } catch(e){
     showToast(`Couldn't approve: ${e.message || e}`, 5000);
   }
@@ -1239,7 +1239,7 @@ async function declineRequest(requestId){
   try{
     const { error } = await sb.rpc('decline_swap_request', { p_request_id: requestId });
     if(error) throw error;
-    showToast('Declined — no credits were charged');
+    showToast('Declined, no credits were charged');
   } catch(e){
     showToast(`Couldn't decline: ${e.message || e}`, 5000);
   }
@@ -1297,7 +1297,7 @@ const STORAGE_KEY = 'swapspot_session_v1';
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, state, swapKeyCounter, listingsOffers: listings.map(l => l.offers) }));
-  } catch(e){ /* storage unavailable or full — session just won't persist, app still works */ }
+  } catch(e){ /* storage unavailable or full: session just won't persist, app still works */ }
 }
 
 function loadState(){
@@ -1316,10 +1316,10 @@ function loadState(){
   } catch(e){ return false; }
 }
 
-/* ---------------- real backend data — auth, wallet, swaps ---------------- */
+/* ---------------- real backend data: auth, wallet, swaps ---------------- */
 
 // Pulls "requests I've sent" via the my_swap_requests() RPC (SECURITY
-// DEFINER, same reasoning as browse_listings() — RLS on swap_requests only
+// DEFINER, same reasoning as browse_listings(): RLS on swap_requests only
 // lets you see rows you're the requester or the listing owner on, so this
 // is a safe single-call way to get your own requests joined with listing +
 // owner info without a client-side join RLS would otherwise block).
@@ -1345,7 +1345,7 @@ async function fetchMySwaps(){
   } catch(e){ console.warn('fetchMySwaps failed', e); }
 }
 
-// Wallet balance + recent ledger entries — RLS limits both to the caller's
+// Wallet balance + recent ledger entries: RLS limits both to the caller's
 // own rows, so no server-side filtering needed beyond the standard select.
 async function fetchWallet(){
   if(!(backendReady && session)) return;
@@ -1411,8 +1411,8 @@ function simulateNextCycle(){
   const lost = expireMonthlyCredits();
   grantMonthlyCredits();
   showToast(lost > 0
-    ? `Billing cycle renewed — ${lost} unused credit${lost > 1 ? 's' : ''} expired, 5 fresh credits added`
-    : 'Billing cycle renewed — 5 fresh monthly credits added', 5000);
+    ? `Billing cycle renewed: ${lost} unused credit${lost > 1 ? 's' : ''} expired, 5 fresh credits added`
+    : 'Billing cycle renewed: 5 fresh monthly credits added', 5000);
   renderAccount();
 }
 
@@ -1420,7 +1420,7 @@ function simulateNextCycle(){
 
 function tickOffers(){
   listings.forEach(l => {
-    const delta = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1 — other members occasionally offering or withdrawing
+    const delta = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1: other members occasionally offering or withdrawing
     l.offers = Math.min(8, Math.max(1, l.offers + delta));
   });
   updateOfferBadges();
@@ -1506,9 +1506,9 @@ function renderMap(){
       <div class="map-lock-overlay">
         <div class="lock-badge">${ICONS.lock}</div>
         <h3>See every swap near you</h3>
-        <p>The live map is part of Swap Plus, powered by Google Maps and Apple Maps — currently in beta.</p>
+        <p>The live map is part of Swap Plus, powered by Google Maps and Apple Maps: currently in beta.</p>
         <button class="btn btn-outline" onclick="subscribe()">Notify me when it launches</button>
-        <span class="map-price">Launching soon — everyone's on Basic for now</span>
+        <span class="map-price">Launching soon: everyone's on Basic for now</span>
       </div>`;
     wrap.querySelector('.map-svg').style.filter = 'blur(3px) saturate(0.7)';
   } else {
@@ -1582,10 +1582,10 @@ function closeBayPhoto(){
   document.getElementById('bayPhotoModal').classList.remove('show');
 }
 
-/* ---------------- list a bay (real listings.insert — the trigger in schema.sql rejects unverified owners) ---------------- */
+/* ---------------- list a bay (real listings.insert, the trigger in schema.sql rejects unverified owners) ---------------- */
 
 // Listing is gated on a verified account, and the Account screen is where that
-// gating is explained — so send unsigned-in members there rather than opening a
+// gating is explained: so send unsigned-in members there rather than opening a
 // modal that would only fail.
 function lendMyBay(){
   if(backendReady && session) openListingModal();
@@ -1610,7 +1610,7 @@ function openListingModal(){
     ${state.isPlus ? `<div class="tc-agree"><input type="checkbox" id="lstPriority"><label for="lstPriority">Swap Plus priority only</label></div>` : ''}
     <div class="ob-sub" id="lstError" style="color:var(--meter); margin-top:8px;"></div>
     <button class="btn btn-plus btn-block" style="margin-top:12px;" onclick="submitListing()">List this bay</button>
-    <div class="demo-note" style="margin-top:10px;">Only verified owners can list — this goes to a real table, and the backend rejects it if your bay verification isn't approved yet.</div>
+    <div class="demo-note" style="margin-top:10px;">Only verified owners can list: this goes to a real table, and the backend rejects it if your bay verification isn't approved yet.</div>
   `;
   document.getElementById('listingModal').classList.add('show');
 }
@@ -1643,7 +1643,7 @@ async function submitListing(){
     });
     if(error) throw error;
     closeListingModal();
-    showToast('Bay listed — it now shows up in the feed', 5000);
+    showToast('Bay listed, it now shows up in the feed', 5000);
     await refreshBackendData();
     navigate('home');
   } catch(e){
@@ -1701,7 +1701,7 @@ function renderOnboarding(){
       <div class="ob-title">Confirm your email</div>
       <div class="ob-sub">We've sent a confirmation link to <b>${escapeHtml(user.email)}</b>. Click it, then come back and sign in.</div>
     `;
-    footer.innerHTML = `<button class="btn btn-plus btn-block" onclick="awaitingConfirmation=false; obMode='signin'; obStep=1; renderOnboarding();">I've confirmed — sign in</button>
+    footer.innerHTML = `<button class="btn btn-plus btn-block" onclick="awaitingConfirmation=false; obMode='signin'; obStep=1; renderOnboarding();">I've confirmed: sign in</button>
       <button class="ob-skip" onclick="awaitingConfirmation=false; obMode='signup'; obStep=1; renderOnboarding();">Back</button>`;
     return;
   }
@@ -1725,7 +1725,7 @@ function renderOnboarding(){
     body.innerHTML = `
       <div class="ob-eyebrow">Step 1 of ${OB_TOTAL}</div>
       <div class="ob-title">Join the drivers near you</div>
-      <div class="ob-sub">SwapSpot runs on members lending each other their parking bays — you'll prove your spot next, so neighbours know it's really yours to lend.</div>
+      <div class="ob-sub">SwapSpot runs on members lending each other their parking bays: you'll prove your spot next, so neighbours know it's really yours to lend.</div>
       <div class="field"><label>Full name</label><input type="text" id="obName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onObField()"></div>
       <div class="field"><label>Email address</label><input type="email" id="obEmail" placeholder="you@email.com" value="${escapeHtml(user.email)}" oninput="onObField()"></div>
       ${backendReady ? `<div class="field"><label>Password</label><input type="password" id="obPassword" placeholder="At least 6 characters" oninput="onObField()"></div>` : ''}
@@ -1767,12 +1767,12 @@ function renderOnboarding(){
     body.innerHTML = `
       <div class="ob-eyebrow">Step ${OB_TOTAL} of ${OB_TOTAL}</div>
       <div class="ob-title">Terms &amp; Conditions</div>
-      <div class="ob-sub">Read this through — it covers the promise at the heart of Swap: that the bay you list is genuinely yours to offer.</div>
+      <div class="ob-sub">Read this through: it covers the promise at the heart of Swap: that the bay you list is genuinely yours to offer.</div>
       <div class="tc-box" id="tcScrollBox" onscroll="onTcScroll()">${TERMS_HTML}</div>
       <div class="tc-scroll-hint" id="tcHint">Scroll to the bottom to continue</div>
       <div class="tc-agree">
         <input type="checkbox" id="tcCheck" disabled onchange="onObField()">
-        <label for="tcCheck">I confirm the information I've provided — including my proof of address — is true, and I agree to the Terms &amp; Conditions and Privacy Policy.</label>
+        <label for="tcCheck">I confirm the information I've provided (including my proof of address) is true, and I agree to the Terms &amp; Conditions and Privacy Policy.</label>
       </div>
     `;
     footer.innerHTML = `<button class="btn btn-plus btn-block" id="obNextBtn" onclick="finishOnboarding()" disabled>Agree &amp; create account</button>`;
@@ -1875,15 +1875,15 @@ async function finishOnboarding(){
         document.getElementById('onboarding').style.display = 'none';
         document.getElementById('appShell').style.display = 'flex';
         await refreshBackendData();
-        showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'} — 5 free credits are in your account`, 5000);
+        showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'}, 5 free credits are in your account`, 5000);
       } else {
-        // Email confirmation is required on this project — no session yet.
+        // Email confirmation is required on this project: no session yet.
         awaitingConfirmation = true;
         renderOnboarding();
       }
       return;
     } catch(e){
-      showToast(`Couldn't create your account: ${e.message || e} — continuing in local demo mode instead`, 6000);
+      showToast(`Couldn't create your account: ${e.message || e}, continuing in local demo mode instead`, 6000);
       // fall through to local-only demo behaviour below
     }
   }
@@ -1891,7 +1891,7 @@ async function finishOnboarding(){
   document.getElementById('appShell').style.display = 'flex';
   user.credits = 5;
   user.creditLog = [{ label: 'Sign-up bonus', amount: 5 }];
-  showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'} — 5 free credits are in your account`, 5000);
+  showToast(`Welcome to SwapSpot, ${user.name.split(' ')[0] || 'there'}, 5 free credits are in your account`, 5000);
   refreshAll();
 }
 
@@ -1924,8 +1924,8 @@ function onBillChosen(e){
       .then(({ error }) => {
         if(error) throw error;
         user.bill = { name:file.name, dataUrl:null, isPdf:!isImage, uploading:false };
-        user.verification = 'pending'; // local UI hint only — the real record lives in profiles.verification_status, reviewed by hand
-        showToast('Uploaded — a real reviewer needs to verify this before your listings show a badge', 5000);
+        user.verification = 'pending'; // local UI hint only: the real record lives in profiles.verification_status, reviewed by hand
+        showToast('Uploaded, a real reviewer needs to verify this before your listings show a badge', 5000);
         rerenderVerifyContext();
       })
       .catch(err => {
@@ -1960,7 +1960,7 @@ function removeBill(){
 
 function simulateApproval(){
   user.verification = 'verified';
-  showToast('Bay photo verified — your listings now show a verified badge');
+  showToast('Bay photo verified, your listings now show a verified badge');
   rerenderVerifyContext();
 }
 
@@ -1992,9 +1992,9 @@ function renderVerifyBlock(){
       ${fileRow}
       <div class="verify-status pending">
         ${ICONS.doc}
-        <div><div class="vs-title">Pending review</div><div class="vs-sub">${live ? "We review submissions by hand — you'll see the verified badge next time you sign in once it's approved" : 'Usually reviewed within 24 hours'}</div></div>
+        <div><div class="vs-title">Pending review</div><div class="vs-sub">${live ? "We review submissions by hand: you'll see the verified badge next time you sign in once it's approved" : 'Usually reviewed within 24 hours'}</div></div>
       </div>
-      ${live ? '' : `<div class="demo-note">Prototype only — real review happens on our end. <a href="#" style="color:var(--curb);" onclick="event.preventDefault();simulateApproval()">Simulate approval</a> to preview the verified state.</div>`}`;
+      ${live ? '' : `<div class="demo-note">Prototype only: real review happens on our end. <a href="#" style="color:var(--curb);" onclick="event.preventDefault();simulateApproval()">Simulate approval</a> to preview the verified state.</div>`}`;
   }
   return `
     ${fileRow}
@@ -2052,7 +2052,7 @@ function renderAccount(){
   document.getElementById('creditsCard').innerHTML = `
     <div class="credits-card">
       <div class="credits-balance"><span class="num">${user.credits}</span><span class="unit">credits</span></div>
-      <div class="credits-rules"><b>Credits are how the community stays even.</b> You earn them by lending your bay to someone else, and spend them borrowing one — so the spaces you take are paid for by the ones you give. Booking a bay costs <b>${COST_STANDARD} credits</b> normally, or <b>${COST_PREMIUM} credits</b> if it's within ${NEAR_METRES}m of your search or if <b>${HOT_THRESHOLD} or more members</b> have made offers on it. You're only charged once the owner approves. When one of your own swaps is confirmed you earn <b>${CREDITS_NORMAL} credits</b> back — <b>${CREDITS_SURGE}</b> if it was surging.${!state.isPlus ? ` Swap Plus is in beta — when it launches, subscribers will get <b>${PLUS_FIRST_CREDITS} welcome credits</b>, then <b>${PLUS_MONTHLY_CREDITS} credits</b> every billing cycle after that.` : ''}</div>
+      <div class="credits-rules"><b>Credits are how the community stays even.</b> You earn them by lending your bay to someone else, and spend them borrowing one: so the spaces you take are paid for by the ones you give. Booking a bay costs <b>${COST_STANDARD} credits</b> normally, or <b>${COST_PREMIUM} credits</b> if it's within ${NEAR_METRES}m of your search or if <b>${HOT_THRESHOLD} or more members</b> have made offers on it. You're only charged once the owner approves. When one of your own swaps is confirmed you earn <b>${CREDITS_NORMAL} credits</b> back: <b>${CREDITS_SURGE}</b> if it was surging.${!state.isPlus ? ` Swap Plus is in beta: when it launches, subscribers will get <b>${PLUS_FIRST_CREDITS} welcome credits</b>, then <b>${PLUS_MONTHLY_CREDITS} credits</b> every billing cycle after that.` : ''}</div>
       ${state.isPlus && grant.active && grant.remaining > 0 ? `
         <div class="expiry-banner">
           ⏳ <b>${grant.remaining} Swap Plus credit${grant.remaining>1?'s':''}</b> expire on <b>${expiryDate}</b> (${daysLeft} day${daysLeft!==1?'s':''} left) if unused this billing cycle.
@@ -2061,7 +2061,7 @@ function renderAccount(){
       }
       <div class="credit-log">
         ${user.creditLog.length === 0
-          ? `<span class="credit-log-empty">No activity yet — swap a bay to start earning.</span>`
+          ? `<span class="credit-log-empty">No activity yet: swap a bay to start earning.</span>`
           : user.creditLog.slice(0,5).map(c => `<div class="credit-log-row"><span>${c.label}</span><span class="amt" style="color:${c.amount<0?'var(--meter)':'var(--signal)'};">${c.amount>=0?'+':''}${c.amount}</span></div>`).join('')
         }
       </div>
@@ -2078,7 +2078,7 @@ function renderAccount(){
         <li>${ICONS.check}<span>Message swap partners directly</span></li>
         <li>${ICONS.check}<span>Standard queue position for bookings</span></li>
       </ul>
-      <div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">Swap is free to use right now — everyone's on Basic while Swap Plus is in beta.</div>
+      <div class="demo-note" style="border-top:none; margin-top:8px; padding-top:0;">Swap is free to use right now: everyone's on Basic while Swap Plus is in beta.</div>
     </div>
     <div class="plan-card highlight">
       <div class="plan-head">
@@ -2087,7 +2087,7 @@ function renderAccount(){
       </div>
       <ul class="plan-feats">
         <li>${ICONS.check}<span><b>Live map</b> of every nearby bay, powered by Google Maps and Apple Maps</span></li>
-        <li>${ICONS.check}<span><b>Priority booking</b> — first in line on every swap</span></li>
+        <li>${ICONS.check}<span><b>Priority booking</b>: first in line on every swap</span></li>
         <li>${ICONS.check}<span>Access to Plus-only bays before anyone else</span></li>
       </ul>
       ${state.isPlus
@@ -2099,7 +2099,7 @@ function renderAccount(){
   saveState();
 }
 
-const PLUS_ENABLED = false; // Swap Plus is in beta — flip to true at launch
+const PLUS_ENABLED = false; // Swap Plus is in beta: flip to true at launch
 
 function activatePlus(){
   state.isPlus = true;
@@ -2107,13 +2107,13 @@ function activatePlus(){
   const amount = firstTime ? PLUS_FIRST_CREDITS : PLUS_MONTHLY_CREDITS;
   grantMonthlyCredits(amount);
   user.everSubscribed = true;
-  showToast(`Welcome to Swap Plus — the live map, priority booking, and ${amount} ${firstTime ? 'welcome' : 'monthly'} credits are unlocked`, 5000);
+  showToast(`Welcome to Swap Plus, the live map, priority booking, and ${amount} ${firstTime ? 'welcome' : 'monthly'} credits are unlocked`, 5000);
   refreshAll();
 }
 
 function subscribe(){
   if(!PLUS_ENABLED){
-    showToast("Swap Plus is in beta — coming soon! You're all set on the Basic plan for now.", 5000);
+    showToast("Swap Plus is in beta, coming soon! You're all set on the Basic plan for now.", 5000);
     return;
   }
   activatePlus();
@@ -2122,8 +2122,8 @@ function unsubscribe(){
   const lost = expireMonthlyCredits();
   state.isPlus = false;
   showToast(lost > 0
-    ? `You're back on Basic — priority booking, the map, and ${lost} unused Swap Plus credit${lost > 1 ? 's' : ''} are gone`
-    : "You're back on Basic — priority booking and the map are locked", 5000);
+    ? `You're back on Basic: priority booking, the map, and ${lost} unused Swap Plus credit${lost > 1 ? 's' : ''} are gone`
+    : "You're back on Basic: priority booking and the map are locked", 5000);
   refreshAll();
 }
 
@@ -2197,7 +2197,7 @@ async function initApp(){
         await refreshBackendData();
         return;
       }
-    } catch(e){ console.warn('getSession failed — falling back to local demo mode', e); }
+    } catch(e){ console.warn('getSession failed, falling back to local demo mode', e); }
     try{
       sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
     } catch(e){ /* not critical */ }
