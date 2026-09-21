@@ -8,8 +8,8 @@ tier (currently locked, in beta).
 
 ## How it works
 
-The front end is still one self-contained file — `index.html`, no build step,
-no framework — but it is no longer a single-player simulation. It talks to a
+The front end is still one self-contained file- `index.html`, no build step,
+no framework- but it is no longer a single-player simulation. It talks to a
 real Postgres backend on a dedicated Supabase project:
 
 - **Real accounts.** Sign-up and sign-in go through Supabase Auth
@@ -26,11 +26,11 @@ real Postgres backend on a dedicated Supabase project:
 - **The server decides what things cost.** Swap cost and "hot" status are
   computed at request time from the real count of existing requests on a
   listing, not trusted from the client. A client with a valid session token
-  still can't grant itself credits or approve its own request — Postgres
+  still can't grant itself credits or approve its own request- Postgres
   enforces that via RLS and the RPCs, not app code.
 
 The Supabase URL and publishable key are hardcoded in `index.html`. That's by
-design — they're safe to expose client-side, which is what RLS and the RPCs
+design- they're safe to expose client-side, which is what RLS and the RPCs
 are there for.
 
 The schema lives in [`supabase/schema.sql`](supabase/schema.sql), and
@@ -43,7 +43,7 @@ If the Supabase client can't initialise or the feed request fails, the app
 falls back to a set of local demo listings and browser local storage, so it
 still runs end-to-end offline (open the file from disk and it works). Local
 storage is also still used to cache some UI state between visits. Being in
-this mode is a fallback, not the normal path — the backend is the source of
+this mode is a fallback, not the normal path- the backend is the source of
 truth.
 
 ## Running it
@@ -64,14 +64,14 @@ Real and working:
 - Browsing live listings
 - Sending, approving, and declining swap requests
 - The credits ledger and balances
-- Creating a listing (verified owners only — see below)
+- Creating a listing (verified owners only- see below)
 - Uploading a bay photo to Storage
 
 Deliberately not done yet:
 
 - **Payments.** The `plus_subscriptions` table models the data, but nothing
-  takes an actual £1.99. Swap Plus stays locked — `PLUS_ENABLED` is `false` in
-  the code — and the instant-book path it would unlock never triggers today.
+  takes an actual £1.99. Swap Plus stays locked- `PLUS_ENABLED` is `false` in
+  the code- and the instant-book path it would unlock never triggers today.
 - **Verification is approved by hand.** You can upload a bay photo and see
   "Pending review", but nothing in the schema lets a client mark itself
   verified. Dan flips `profiles.verification_status` in the Supabase Table
@@ -88,7 +88,7 @@ Deliberately not done yet:
 
 ## We'd like people to stress test this
 
-It's already been through several automated passes — injection/XSS attempts,
+It's already been through several automated passes- injection/XSS attempts,
 rapid-fire clicking and double-submit race conditions, boundary values
 (negative credits, absurd offer counts), corrupted saved-session data, and
 viewport sizes from a 280px phone to a 2560px desktop. All clean at time of
@@ -96,23 +96,23 @@ writing (one real XSS bug was found this way and fixed).
 
 What's genuinely more useful coming from real people than from scripted tests:
 
-- **Real devices and browsers** — Safari on an actual iPhone, older Android
+- **Real devices and browsers**- Safari on an actual iPhone, older Android
   Chrome, Firefox. The automated passes only ran headless Chromium.
-- **Touch gestures** — swipes, pinch-zoom, long-press, double-tap-to-zoom on
+- **Touch gestures**- swipes, pinch-zoom, long-press, double-tap-to-zoom on
   the map screen.
-- **Screen readers / accessibility** — VoiceOver, TalkBack, keyboard-only
+- **Screen readers / accessibility**- VoiceOver, TalkBack, keyboard-only
   navigation through the whole onboarding flow.
-- **Weird real-world input** — pasting text with emoji, RTL text, or
+- **Weird real-world input**- pasting text with emoji, RTL text, or
   copy-pasted formatting into the name/email fields.
-- **Slow or flaky networks** — Google Fonts and the Supabase JS client both
+- **Slow or flaky networks**- Google Fonts and the Supabase JS client both
   load from a CDN. See how the app behaves if either is slow or blocked, and
   whether the fallback to local demo mode is graceful.
-- **Two real accounts at once** — now that swaps involve two actual people,
+- **Two real accounts at once**- now that swaps involve two actual people,
   try requesting and approving between two devices and check the credits move
   correctly on both sides.
-- **Multiple tabs open at once** — sign in on one tab, act on both, and see
+- **Multiple tabs open at once**- sign in on one tab, act on both, and see
   whether the cached state and the server agree afterwards.
-- **The credits/surge economy** — try to find a sequence of actions that
+- **The credits/surge economy**- try to find a sequence of actions that
   leaves a credit balance in a state that doesn't add up.
 
 ## Reporting what you find
