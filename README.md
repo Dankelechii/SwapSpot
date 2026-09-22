@@ -13,7 +13,7 @@ tier (currently locked, in beta).
 [Watch the 20 second demo](https://dankelechii.github.io/SwapSpot/media/demo.mp4)
 (has sound). An empty map fills as neighbours lend their bays, a real listing
 gets requested for 5 credits, and the credits come straight back when you lend
-yours out. That loop is the whole product.
+yours out. That loop is the whole product. Community keeps the app running and credits circulating!
 
 ## How it works
 
