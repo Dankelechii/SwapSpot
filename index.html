@@ -1286,6 +1286,9 @@ function renderSwaps(){
 const DARK_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 const DARK_LABELS = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
 const TILE_ATTRIB = 'Tiles &copy; Esri';
+// last zoom level Esri actually has tiles for; above this it serves a
+// "Map data not yet available" placeholder rather than 404ing
+const DARK_MAX_NATIVE_ZOOM = 16;
 
 let leafletPromise = null;
 function loadLeaflet(){
@@ -1347,11 +1350,19 @@ async function mountMaps(){
     const lat = parseFloat(node.dataset.lat), lng = parseFloat(node.dataset.lng);
     try{
       const map = L.map(node, {
-        center: [lat, lng], zoom: 16,
+        center: [lat, lng], zoom: DARK_MAX_NATIVE_ZOOM, maxZoom: 17,
         zoomControl: true, scrollWheelZoom: false, attributionControl: true
       });
-      L.tileLayer(DARK_TILES, { attribution: TILE_ATTRIB, maxZoom: 19 }).addTo(map);
-      L.tileLayer(DARK_LABELS, { maxZoom: 19 }).addTo(map);
+      // Esri's dark canvas is only cached to zoom 16 here: ask for 17 and it
+      // serves a "Map data not yet available" placeholder. maxNativeZoom
+      // stops at the last real level and lets Leaflet upscale beyond it, so
+      // zooming in goes soft rather than blank.
+      L.tileLayer(DARK_TILES, {
+        attribution: TILE_ATTRIB, maxNativeZoom: DARK_MAX_NATIVE_ZOOM, maxZoom: 17
+      }).addTo(map);
+      L.tileLayer(DARK_LABELS, {
+        maxNativeZoom: DARK_MAX_NATIVE_ZOOM, maxZoom: 17
+      }).addTo(map);
       L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'bay-pin',
