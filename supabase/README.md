@@ -146,3 +146,8 @@ baseline.
   `lng` to `my_swap_requests()`, so "Navigate to this bay" can drop a pin on
   the bay rather than the street. The app ships fine without it and falls back
   to a street-name query until it is applied.
+- `migrations/2026-09-22-swap-requests-realtime.sql`- publishes
+  `swap_requests` over Realtime and sets `replica identity full`, so both
+  sides of a swap are told the moment it changes. No new policy: Realtime
+  applies the existing SELECT policy per subscriber. Without it the
+  subscription simply never fires.

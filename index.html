@@ -840,6 +840,9 @@
         <div class="section-label" style="margin-top:8px;">Membership</div>
         <div class="plan-toggle-wrap" id="planCards"></div>
         <div style="padding:0 20px 6px; display:flex; flex-direction:column; gap:8px;">
+          <!-- label and handler are set by renderAccount(); permission is only
+               ever requested from here, never on page load -->
+          <button class="btn btn-outline btn-block" id="notifyBtn" style="display:none;"></button>
           <button class="btn btn-outline btn-block" onclick="openTermsModal()">View Terms &amp; Conditions</button>
           <!-- label and handler are set by renderAccount(): real sign-out, or ending a test session -->
           <button class="btn btn-outline btn-block" id="signOutBtn" style="display:none;">Sign out</button>
@@ -1663,10 +1666,102 @@ async function fetchProfile(){
 // One-stop refresh: called after sign-in, after any swap/listing action, and
 // on page load once a session is confirmed. Keeps `listings`, `user`,
 // `state.mySwaps`, and `ownerInboxRequests` in sync with the real backend.
+/* ---------------- live updates ----------------
+   One subscription covers both sides of a swap. The RLS SELECT policy on
+   swap_requests already limits rows to the requester and the listing owner,
+   and Realtime applies it per subscriber, so nobody sees anyone else's. */
+
+let swapChannel = null;
+
+function startRealtime(){
+  if(!(backendReady && session) || swapChannel) return;
+  try{
+    swapChannel = sb
+      .channel('swap-requests')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, onSwapChange)
+      .subscribe();
+  } catch(e){
+    // not fatal: without it the app behaves exactly as it did before
+    console.warn('realtime subscribe failed, falling back to manual refresh', e);
+  }
+}
+
+function stopRealtime(){
+  if(!swapChannel) return;
+  try{ sb.removeChannel(swapChannel); } catch(e){ /* already gone */ }
+  swapChannel = null;
+}
+
+async function onSwapChange(payload){
+  const row = payload.new || {};
+  const before = payload.old || {};
+  const me = session && session.user && session.user.id;
+  const iAmRequester = row.requester_id === me;
+
+  await refreshBackendData();
+
+  if(payload.eventType === 'INSERT' && !iAmRequester){
+    announce('New swap request', 'Someone wants to borrow one of your bays.');
+    return;
+  }
+  // only speak up when the status actually moved
+  if(payload.eventType === 'UPDATE' && iAmRequester && row.status !== before.status){
+    if(row.status === 'confirmed'){
+      announce('Swap approved', `Your bay is booked. ${row.cost_credits} credits charged.`);
+    } else if(row.status === 'declined'){
+      announce('Swap declined', 'No credits were charged.');
+    }
+  }
+}
+
+// In-app toast always. A system notification only when the member asked for
+// one and is not already looking at the app.
+function announce(title, body){
+  showToast(`${title}: ${body}`, 6000);
+  if(!user.notify) return;
+  try{
+    if(typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.hidden){
+      new Notification(title, { body, tag: 'swapspot' });
+    }
+  } catch(e){ /* unsupported or blocked */ }
+}
+
+function notifySupported(){
+  return typeof Notification !== 'undefined' && window.isSecureContext;
+}
+
+// Permission is only ever requested from this button, never on load.
+async function enableNotifications(){
+  if(!notifySupported()){
+    showToast('This browser will not show notifications here', 4000);
+    return;
+  }
+  if(Notification.permission === 'denied'){
+    showToast('Notifications are blocked for this site in your browser settings', 6000);
+    return;
+  }
+  let perm = Notification.permission;
+  if(perm !== 'granted') perm = await Notification.requestPermission();
+  user.notify = perm === 'granted';
+  saveState();
+  renderAccount();
+  showToast(user.notify
+    ? 'Notifications on. We will tell you when a swap is approved.'
+    : 'Left off. Swap updates still appear in the app.', 5000);
+}
+
+function disableNotifications(){
+  user.notify = false;
+  saveState();
+  renderAccount();
+  showToast('Notifications off', 3000);
+}
+
 async function refreshBackendData(){
   if(!(backendReady && session)) return;
   await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox()]);
   refreshAll();
+  startRealtime();
 }
 
 /* ---------------- Swap Plus monthly credit allowance ---------------- */
@@ -1938,6 +2033,7 @@ async function submitListing(){
 // visit looks. Shared by signing out of a real account and by ending a test
 // session, which otherwise had no way back.
 function resetToLanding(){
+  stopRealtime();
   session = null;
   user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
   state.mySwaps = [];
@@ -2396,6 +2492,25 @@ function renderAccount(){
       <div class="profile-sub">${state.isPlus ? 'Swap Plus member' : 'Basic member'}</div>
     </div>`;
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
+
+  const notifyBtn = document.getElementById('notifyBtn');
+  if(notifyBtn){
+    // only offered to real accounts: a test session has no swaps to be told about
+    if(!(backendReady && session) || !notifySupported()){
+      notifyBtn.style.display = 'none';
+    } else if(Notification.permission === 'denied'){
+      notifyBtn.style.display = 'block';
+      notifyBtn.textContent = 'Notifications blocked in browser settings';
+      notifyBtn.disabled = true;
+      notifyBtn.onclick = null;
+    } else {
+      notifyBtn.style.display = 'block';
+      notifyBtn.disabled = false;
+      const on = user.notify && Notification.permission === 'granted';
+      notifyBtn.textContent = on ? 'Swap notifications on' : 'Notify me when a swap is approved';
+      notifyBtn.onclick = on ? disableNotifications : enableNotifications;
+    }
+  }
 
   const signOutBtn = document.getElementById('signOutBtn');
   if(signOutBtn){
