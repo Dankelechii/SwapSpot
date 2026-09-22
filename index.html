@@ -573,8 +573,20 @@
   .nav-dest{ font-family:'Oswald',sans-serif; font-size:17px; font-weight:600; margin-bottom:10px; }
   .nav-map{
     width:100%; height:180px; border:0; border-radius:12px; margin-bottom:10px;
-    background:var(--asphalt-3);
+    background:var(--asphalt-3); overflow:hidden; z-index:0;
   }
+  /* Leaflet ships light chrome; these pull it into the app's palette */
+  .nav-map .leaflet-container{ background:var(--asphalt-3); font-family:'Inter',sans-serif; }
+  .nav-map .leaflet-control-attribution{
+    background:rgba(27,29,33,0.82); color:var(--paint-dim); font-size:9px;
+  }
+  .nav-map .leaflet-control-attribution a{ color:var(--paint-dim); }
+  .nav-map .leaflet-bar a{
+    background:var(--asphalt-3); color:var(--paint);
+    border-bottom-color:rgba(246,244,236,0.12);
+  }
+  .nav-map .leaflet-bar a:hover{ background:var(--asphalt-2); }
+  .bay-pin svg{ width:28px; height:34px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); }
   .nav-note{ font-size:11.5px; color:var(--paint-dim); line-height:1.5; margin-bottom:14px; }
   .nav-app{ margin-bottom:8px; text-decoration:none; }
   .nav-app:last-child{ margin-bottom:0; }
@@ -1262,30 +1274,101 @@ function renderSwaps(){
    a street query, which all three apps accept and which still gets someone
    to the right road. */
 
-// Paste a Maps Embed API key here and selected bays render on Google's map
-// instead. Empty is fine: OpenStreetMap needs no key and is used by default,
-// so every member sees a real map of the bay either way.
-const GOOGLE_MAPS_API_KEY = '';
+/* The in-app map is a preview, so it should look like the rest of the app.
+   Neither the OpenStreetMap embed nor Google's Embed API offers a dark
+   basemap, and inverting a light one with a CSS filter comes out muddy olive
+   with orange roads. So the preview uses Leaflet with CARTO's dark tiles,
+   which are built for dark interfaces, and a marker in curb amber.
+   Google, Apple and Waze remain the hand-off for actual navigation. */
+// Esri's dark canvas, which serves without an API key. CARTO's dark basemap
+// was the obvious choice but now stamps "API KEY REQUIRED" across every tile.
+// The base carries no labels, so the reference layer goes on top of it.
+const DARK_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const DARK_LABELS = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
+const TILE_ATTRIB = 'Tiles &copy; Esri';
+
+let leafletPromise = null;
+function loadLeaflet(){
+  if(window.L) return Promise.resolve(window.L);
+  if(leafletPromise) return leafletPromise;
+  leafletPromise = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => reject(new Error('leaflet unavailable'));
+    document.head.appendChild(js);
+  });
+  return leafletPromise;
+}
 
 // The map screen stays behind Swap Plus for the beta. Looking up where a bay
 // is does not depend on it: tapping a bay number in the feed opens that bay
 // on a real map. Set this to false to open the map screen to everyone.
 const MAP_PLUS_GATED = true;
 
-// A real, live, scrollable map centred on one bay. Google when a key is
-// configured, otherwise OpenStreetMap, which is keyless and shows a marker.
+// Returns a placeholder the caller drops into the DOM; mountMaps() fills it
+// once Leaflet is up. Markup first, map second, so callers stay synchronous.
+let mapSeq = 0;
 function liveMapEmbed(lat, lng, height){
   if(typeof lat !== 'number' || typeof lng !== 'number') return '';
   const h = height || 180;
-  if(GOOGLE_MAPS_API_KEY){
-    return `<iframe class="nav-map" style="height:${h}px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-      src="https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&q=${lat},${lng}&zoom=16"></iframe>`;
-  }
-  // a small bounding box around the bay, roughly 300m across
+  const id = `livemap-${++mapSeq}`;
+  return `<div class="nav-map" id="${id}" style="height:${h}px;" data-lat="${lat}" data-lng="${lng}"></div>`;
+}
+
+// If Leaflet cannot load, fall back to the keyless OpenStreetMap embed. A
+// light map beats no map.
+function fallbackMapIframe(node){
+  const lat = parseFloat(node.dataset.lat), lng = parseFloat(node.dataset.lng);
   const dLat = 0.0018, dLng = 0.0030;
   const bbox = `${(lng-dLng).toFixed(5)},${(lat-dLat).toFixed(5)},${(lng+dLng).toFixed(5)},${(lat+dLat).toFixed(5)}`;
-  return `<iframe class="nav-map" style="height:${h}px;" loading="lazy"
+  node.innerHTML = `<iframe style="width:100%;height:100%;border:0;border-radius:12px;" loading="lazy"
     src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}"></iframe>`;
+  node.dataset.mounted = '1';
+}
+
+async function mountMaps(){
+  const nodes = [...document.querySelectorAll('.nav-map[data-lat]:not([data-mounted])')];
+  if(!nodes.length) return;
+  let L;
+  try{
+    L = await loadLeaflet();
+  } catch(e){
+    nodes.forEach(fallbackMapIframe);
+    return;
+  }
+  nodes.forEach(node => {
+    if(node.dataset.mounted) return;
+    node.dataset.mounted = '1';
+    const lat = parseFloat(node.dataset.lat), lng = parseFloat(node.dataset.lng);
+    try{
+      const map = L.map(node, {
+        center: [lat, lng], zoom: 16,
+        zoomControl: true, scrollWheelZoom: false, attributionControl: true
+      });
+      L.tileLayer(DARK_TILES, { attribution: TILE_ATTRIB, maxZoom: 19 }).addTo(map);
+      L.tileLayer(DARK_LABELS, { maxZoom: 19 }).addTo(map);
+      L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'bay-pin',
+          html: `<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M100,228 C60,166 24,132 24,90 A76,76 0 1 1 176,90 C176,132 140,166 100,228 Z" fill="#F0AC3D"/>
+                   <circle cx="100" cy="90" r="30" fill="#1B1D21"/>
+                 </svg>`,
+          iconSize: [28, 34], iconAnchor: [14, 34]
+        })
+      }).addTo(map);
+      // the sheet animates in, so the container has no size on first paint
+      setTimeout(() => map.invalidateSize(), 60);
+    } catch(e){
+      console.warn('map mount failed, falling back', e);
+      fallbackMapIframe(node);
+    }
+  });
 }
 
 function navTarget(x){
@@ -1343,6 +1426,7 @@ function openNavigate(target){
     <a class="btn btn-outline btn-block nav-app" href="${u.waze}" target="_blank" rel="noopener noreferrer">Waze</a>
   `;
   document.getElementById('navModal').classList.add('show');
+  mountMaps();
 }
 
 function navigateToListing(id){
@@ -2211,6 +2295,7 @@ function showPin(id){
   // live map. Scroll the screen to the end, which is where the popover is.
   const screenEl = document.getElementById('screen-map');
   if(screenEl) screenEl.scrollTop = screenEl.scrollHeight;
+  mountMaps();
 }
 
 /* ---------------- onboarding ---------------- */
