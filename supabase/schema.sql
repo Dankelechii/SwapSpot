@@ -546,6 +546,9 @@ returns table (
   listing_id uuid,
   bay_number text,
   street text,
+  area text,
+  lat double precision,
+  lng double precision,
   owner_id uuid,
   owner_name text,
   duration_hours smallint,
@@ -560,7 +563,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select s.id, s.listing_id, l.bay_number, l.street, l.owner_id, p.display_name,
+  -- area/lat/lng are returned so the app can hand a requested bay off to
+  -- Google Maps, Apple Maps or Waze without a second lookup. They describe a
+  -- listing the caller is already entitled to see.
+  select s.id, s.listing_id, l.bay_number, l.street, l.area, l.lat, l.lng,
+         l.owner_id, p.display_name,
          s.duration_hours, s.cost_credits, s.is_hot, s.is_near, s.status, s.created_at
   from swap_requests s
   join listings l on l.id = s.listing_id

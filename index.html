@@ -556,6 +556,22 @@
   .credits-balance{ display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
   .credits-balance .num{ font-family:'Oswald',sans-serif; font-size:34px; font-weight:700; color:var(--curb); }
   .credits-balance .unit{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--paint-dim); text-transform:uppercase; letter-spacing:0.08em; }
+  /* ---- navigate hand-off ---- */
+  .nav-dest{ font-family:'Oswald',sans-serif; font-size:17px; font-weight:600; margin-bottom:10px; }
+  .nav-map{
+    width:100%; height:180px; border:0; border-radius:12px; margin-bottom:10px;
+    background:var(--asphalt-3);
+  }
+  .nav-note{ font-size:11.5px; color:var(--paint-dim); line-height:1.5; margin-bottom:14px; }
+  .nav-app{ margin-bottom:8px; text-decoration:none; }
+  .nav-app:last-child{ margin-bottom:0; }
+  .nav-link{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-family:'Inter',sans-serif; font-size:12px; font-weight:600; color:var(--curb);
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .nav-link svg{ width:14px; height:14px; }
+
   /* ---- the community compact: why the app needs everyone ---- */
   .compact{
     margin:2px 0 20px; padding:14px 15px;
@@ -869,6 +885,17 @@
       </div>
     </div>
 
+    <!-- NAVIGATE MODAL -->
+    <div class="modal-overlay" id="navModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>Navigate to this bay</h3>
+          <button class="modal-close" onclick="closeNavigate()">✕</button>
+        </div>
+        <div id="navBody"></div>
+      </div>
+    </div>
+
     <!-- BAY PHOTO MODAL -->
     <div class="modal-overlay" id="bayPhotoModal">
       <div class="modal-sheet">
@@ -957,13 +984,16 @@ const TERMS_HTML = `
   <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction- if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
 `;
 
+// lat/lng are real approximate coordinates for these Shoreditch streets, so
+// the navigation hand-off opens somewhere sensible even in demo mode. The `mi`
+// values stay as authored, because they drive the surge and premium pricing.
 const LOCAL_DEMO_LISTINGS = [
-  { id:1, bay:'BAY 14A', street:'Shoreditch High St', time:'Today · 09:00–17:00', owner:'Meera R.', mi:0.05, priority:false, offers:2 },
-  { id:2, bay:'BAY 02C', street:'Old Street', time:'Today · 12:00–14:00', owner:'Tom K.', mi:0.9, priority:true, offers:6 },
-  { id:3, bay:'BAY 21', street:'Hoxton Square', time:'Tomorrow · 08:00–18:00', owner:'Ayesha N.', mi:1.4, priority:false, offers:1 },
-  { id:4, bay:'BAY 07B', street:'Curtain Road', time:'Today · 18:00–22:00', owner:'Priya S.', mi:0.5, priority:false, offers:3 },
-  { id:5, bay:'BAY 30', street:'Redchurch Street', time:'Fri · 07:00–19:00', owner:'Owen D.', mi:2.6, priority:true, offers:5 },
-  { id:6, bay:'BAY 11', street:'Columbia Road', time:'Sat · 09:00–13:00', owner:'Layla F.', mi:3.8, priority:false, offers:4 },
+  { id:1, bay:'BAY 14A', street:'Shoreditch High St', time:'Today · 09:00–17:00', owner:'Meera R.', mi:0.05, priority:false, offers:2, lat:51.5241, lng:-0.0778 },
+  { id:2, bay:'BAY 02C', street:'Old Street', time:'Today · 12:00–14:00', owner:'Tom K.', mi:0.9, priority:true, offers:6, lat:51.5256, lng:-0.0875 },
+  { id:3, bay:'BAY 21', street:'Hoxton Square', time:'Tomorrow · 08:00–18:00', owner:'Ayesha N.', mi:1.4, priority:false, offers:1, lat:51.5275, lng:-0.0823 },
+  { id:4, bay:'BAY 07B', street:'Curtain Road', time:'Today · 18:00–22:00', owner:'Priya S.', mi:0.5, priority:false, offers:3, lat:51.5231, lng:-0.0806 },
+  { id:5, bay:'BAY 30', street:'Redchurch Street', time:'Fri · 07:00–19:00', owner:'Owen D.', mi:2.6, priority:true, offers:5, lat:51.5244, lng:-0.0729 },
+  { id:6, bay:'BAY 11', street:'Columbia Road', time:'Sat · 09:00–13:00', owner:'Layla F.', mi:3.8, priority:false, offers:4, lat:51.5298, lng:-0.0703 },
 ];
 // Real listings (from Supabase) replace this array's contents once fetched;
 // it starts as the local demo set so the UI has something to render before
@@ -1030,6 +1060,10 @@ async function fetchListings(){
         mi: mi == null ? 0 : Math.round(mi * 100) / 100,
         priority: row.priority_only,
         offers: row.offer_count || 0,
+        // kept for the navigation hand-off and the map pin, not just distance
+        lat: row.lat,
+        lng: row.lng,
+        area: row.area,
       };
     });
     return true;
@@ -1190,6 +1224,9 @@ function renderSwaps(){
             <div class="ticket-time">${s.time ? s.time + ' · ' : ''}${s.duration}</div>
             <div class="ticket-swapper">Swap with <b>${escapeHtml(s.owner)}</b></div>
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
+            <div style="margin-top:10px;">
+              <button class="nav-link" onclick="navigateToSwap(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.car}Navigate to this bay</button>
+            </div>
             ${footer}
           </div>
           <div class="ticket-stub"><div class="stub-btn locked-stub">${ICONS.check}Sent</div></div>
@@ -1199,6 +1236,87 @@ function renderSwaps(){
     ${inboxHTML}`;
   saveState();
   renderOwnerInbox();
+}
+
+/* ---------------- navigate to a bay ----------------
+   Coordinates give the driver a pin on the bay itself. When a record has
+   none (my_swap_requests() did not return them until recently), fall back to
+   a street query, which all three apps accept and which still gets someone
+   to the right road. */
+
+// Paste a Maps Embed API key here to show the bay on a real Google map when
+// it is selected. Empty is fine: everything below still works, and the map
+// screen keeps its existing schematic view.
+const GOOGLE_MAPS_API_KEY = '';
+
+function navTarget(x){
+  if(!x) return null;
+  if(typeof x.lat === 'number' && typeof x.lng === 'number'){
+    return { kind:'coords', lat:x.lat, lng:x.lng, label:`${x.bay}, ${x.street}` };
+  }
+  const q = [x.street, x.area || 'London'].filter(Boolean).join(', ');
+  return q ? { kind:'query', q, label:`${x.bay}, ${x.street}` } : null;
+}
+
+function navUrls(t){
+  if(t.kind === 'coords'){
+    const ll = `${t.lat},${t.lng}`;
+    return {
+      google: `https://www.google.com/maps/dir/?api=1&destination=${ll}`,
+      apple:  `https://maps.apple.com/?daddr=${ll}&dirflg=d`,
+      waze:   `https://waze.com/ul?ll=${ll}&navigate=yes`
+    };
+  }
+  const q = encodeURIComponent(t.q);
+  return {
+    google: `https://www.google.com/maps/dir/?api=1&destination=${q}`,
+    apple:  `https://maps.apple.com/?daddr=${q}&dirflg=d`,
+    waze:   `https://waze.com/ul?q=${q}&navigate=yes`
+  };
+}
+
+// Find the bay behind a swap: the swap's own coordinates first, then the live
+// feed by listing id, then whatever the swap itself carries.
+function bayForSwap(s){
+  if(!s) return null;
+  if(typeof s.lat === 'number' && typeof s.lng === 'number') return s;
+  const match = listings.find(l => l.id === s.listingId || l.id === s.id);
+  return match || s;
+}
+
+function openNavigate(target){
+  const t = navTarget(target);
+  const body = document.getElementById('navBody');
+  if(!t || !body){
+    showToast("No location saved for that bay yet", 4000);
+    return;
+  }
+  const u = navUrls(t);
+  const embed = (GOOGLE_MAPS_API_KEY && t.kind === 'coords')
+    ? `<iframe class="nav-map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+         src="https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&q=${t.lat},${t.lng}&zoom=16"></iframe>`
+    : '';
+  body.innerHTML = `
+    <div class="nav-dest">${escapeHtml(t.label)}</div>
+    ${embed}
+    <div class="nav-note">${t.kind === 'coords'
+      ? 'Opens a pin on the bay itself.'
+      : 'No exact coordinates saved for this one, so this opens the street.'}</div>
+    <a class="btn btn-outline btn-block nav-app" href="${u.google}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+    <a class="btn btn-outline btn-block nav-app" href="${u.apple}" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+    <a class="btn btn-outline btn-block nav-app" href="${u.waze}" target="_blank" rel="noopener noreferrer">Waze</a>
+  `;
+  document.getElementById('navModal').classList.add('show');
+}
+
+function navigateToListing(id){
+  openNavigate(listings.find(l => l.id === id));
+}
+function navigateToSwap(key){
+  openNavigate(bayForSwap(state.mySwaps.find(s => s.key === key || s.id === key)));
+}
+function closeNavigate(){
+  document.getElementById('navModal').classList.remove('show');
 }
 
 function openBookingModal(id){
@@ -1465,8 +1583,14 @@ async function fetchMySwaps(){
     state.mySwaps = (data || []).map(row => ({
       remote: true,
       id: row.id,
+      listingId: row.listing_id,
       bay: row.bay_number,
       street: row.street,
+      // present once the updated my_swap_requests() is applied; until then
+      // navTarget() falls back to a street query
+      area: row.area,
+      lat: row.lat,
+      lng: row.lng,
       time: '',
       duration: `${row.duration_hours} hour${row.duration_hours>1?'s':''}`,
       owner: row.owner_name,
@@ -1833,7 +1957,13 @@ function showPin(id){
     </div>
     <div class="ticket-time" style="margin-bottom:6px;">${l.time} · ${l.mi} mi away</div>
     <div class="cost-line ${premium?'premium':''}" style="margin:0 0 10px;">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
+    ${GOOGLE_MAPS_API_KEY && typeof l.lat === 'number' ? `
+      <iframe class="nav-map" style="height:130px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+        src="https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&q=${l.lat},${l.lng}&zoom=16"></iframe>` : ''}
     <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${jsId(l.id)})">Request this bay</button>
+    <div style="margin-top:10px; text-align:center;">
+      <button class="nav-link" onclick="navigateToListing(${jsId(l.id)})">${ICONS.car}Navigate to this bay</button>
+    </div>
   `;
   pop.classList.add('show');
 }
