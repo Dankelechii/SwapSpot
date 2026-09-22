@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SwapSpot- parking, swapped</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1B1D21">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SwapSpot">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -842,6 +849,7 @@
         <div style="padding:0 20px 6px; display:flex; flex-direction:column; gap:8px;">
           <!-- label and handler are set by renderAccount(); permission is only
                ever requested from here, never on page load -->
+          <button class="btn btn-outline btn-block" id="installBtn" style="display:none;"></button>
           <button class="btn btn-outline btn-block" id="notifyBtn" style="display:none;"></button>
           <button class="btn btn-outline btn-block" onclick="openTermsModal()">View Terms &amp; Conditions</button>
           <!-- label and handler are set by renderAccount(): real sign-out, or ending a test session -->
@@ -1726,6 +1734,111 @@ function announce(title, body){
   } catch(e){ /* unsupported or blocked */ }
 }
 
+/* ---------------- installable app + web push ----------------
+   Paste the VAPID public key here after generating a pair. The private half
+   goes in the push Edge Function's secrets and must never appear in this
+   file. Without a key the app still works: notifications then only arrive
+   while a tab is open, via the Realtime subscription above. */
+const VAPID_PUBLIC_KEY = '';
+
+let swRegistration = null;
+let installPrompt = null;
+
+function isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+function pushSupported(){
+  return 'serviceWorker' in navigator && 'PushManager' in window && window.isSecureContext;
+}
+
+// Chrome fires this instead of installing straight away, so hold it and let
+// the member choose from the Account screen.
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  if(document.getElementById('appShell').style.display !== 'none') renderAccount();
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; renderAccount(); });
+
+async function addToHomeScreen(){
+  if(installPrompt){
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    renderAccount();
+    return;
+  }
+  // Safari has no install prompt API, and on iPhone push only reaches an
+  // installed app, so say exactly what to tap.
+  if(isIOS()){
+    showToast('In Safari tap Share, then "Add to Home Screen". On iPhone that is the only way notifications can reach you.', 9000);
+  } else {
+    showToast('Open your browser menu and choose Install app, or Add to Home Screen', 6000);
+  }
+}
+
+async function registerServiceWorker(){
+  if(!('serviceWorker' in navigator) || !window.isSecureContext) return null;
+  try{
+    swRegistration = await navigator.serviceWorker.register('sw.js');
+    return swRegistration;
+  } catch(e){
+    console.warn('service worker registration failed', e);
+    return null;
+  }
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+// Subscribes this browser and records where to reach it. Returns false when
+// push is unavailable, which is not an error: Realtime still covers the
+// member while the app is open.
+async function subscribeToPush(){
+  if(!VAPID_PUBLIC_KEY || !pushSupported() || !(backendReady && session)) return false;
+  try{
+    const reg = swRegistration || await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const j = sub.toJSON();
+    const { error } = await sb.from('push_subscriptions').upsert({
+      endpoint: j.endpoint,
+      user_id: session.user.id,
+      p256dh: j.keys.p256dh,
+      auth: j.keys.auth,
+      user_agent: navigator.userAgent.slice(0, 300)
+    }, { onConflict: 'endpoint' });
+    if(error) throw error;
+    return true;
+  } catch(e){
+    console.warn('push subscribe failed', e);
+    return false;
+  }
+}
+
+async function unsubscribeFromPush(){
+  try{
+    const reg = swRegistration || await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(!sub) return;
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe();
+    if(backendReady && session) await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  } catch(e){ console.warn('push unsubscribe failed', e); }
+}
+
 function notifySupported(){
   return typeof Notification !== 'undefined' && window.isSecureContext;
 }
@@ -1744,15 +1857,23 @@ async function enableNotifications(){
   if(perm !== 'granted') perm = await Notification.requestPermission();
   user.notify = perm === 'granted';
   saveState();
+  let pushed = false;
+  if(user.notify) pushed = await subscribeToPush();
   renderAccount();
-  showToast(user.notify
-    ? 'Notifications on. We will tell you when a swap is approved.'
-    : 'Left off. Swap updates still appear in the app.', 5000);
+  if(!user.notify){
+    showToast('Left off. Swap updates still appear in the app.', 5000);
+  } else if(pushed){
+    showToast('Notifications on, even when the app is closed.', 5000);
+  } else {
+    // permission granted but no push channel: still useful while a tab is open
+    showToast('Notifications on while the app is open.', 5000);
+  }
 }
 
-function disableNotifications(){
+async function disableNotifications(){
   user.notify = false;
   saveState();
+  await unsubscribeFromPush();
   renderAccount();
   showToast('Notifications off', 3000);
 }
@@ -2493,6 +2614,18 @@ function renderAccount(){
     </div>`;
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
 
+  const installBtn = document.getElementById('installBtn');
+  if(installBtn){
+    if(isStandalone()){
+      installBtn.style.display = 'none';
+    } else {
+      installBtn.style.display = 'block';
+      // on iPhone this is not a nicety: push only reaches an installed app
+      installBtn.textContent = isIOS() ? 'Add to Home Screen (needed for alerts)' : 'Install SwapSpot';
+      installBtn.onclick = addToHomeScreen;
+    }
+  }
+
   const notifyBtn = document.getElementById('notifyBtn');
   if(notifyBtn){
     // only offered to real accounts: a test session has no swaps to be told about
@@ -2739,6 +2872,8 @@ async function initApp(){
       sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
     } catch(e){ /* not critical */ }
   }
+
+  registerServiceWorker();
 
   if(resumeTarget !== 'app' && loadState()) resumeTarget = 'app';
 

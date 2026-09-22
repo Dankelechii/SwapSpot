@@ -146,8 +146,59 @@ baseline.
   `lng` to `my_swap_requests()`, so "Navigate to this bay" can drop a pin on
   the bay rather than the street. The app ships fine without it and falls back
   to a street-name query until it is applied.
+- `migrations/2026-09-22-push-subscriptions.sql`- stores one Web Push
+  subscription per browser, scoped to its owner by RLS. Needed only if you
+  turn on Web Push (see below).
 - `migrations/2026-09-22-swap-requests-realtime.sql`- publishes
   `swap_requests` over Realtime and sets `replica identity full`, so both
   sides of a swap are told the moment it changes. No new policy: Realtime
   applies the existing SELECT policy per subscriber. Without it the
   subscription simply never fires.
+
+
+## Turning on Web Push
+
+Realtime already tells both sides of a swap the moment it changes, but only
+while the app is open. Web Push reaches someone who has closed it. It is free:
+the browsers' push services do not charge, and the send runs in a Supabase
+Edge Function.
+
+Nothing below is required. With no VAPID key configured the app quietly skips
+push and keeps using Realtime.
+
+**1. Generate a VAPID key pair.** Do this yourself so the private key never
+passes through a chat log or a commit:
+
+    npx web-push generate-vapid-keys
+
+**2. Put the public half in the app.** `index.html`, `VAPID_PUBLIC_KEY`. It is
+not a secret; it ships to every browser by design.
+
+**3. Apply `migrations/2026-09-22-push-subscriptions.sql`.**
+
+**4. Set the function secrets** (Edge Functions, Secrets):
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` you
+own), and `PUSH_WEBHOOK_SECRET` (any long random string).
+
+**5. Deploy the function:** `supabase functions deploy push`. It lives in
+`functions/push/`.
+
+**6. Add a Database Webhook** on `public.swap_requests` for INSERT and UPDATE,
+pointing at the deployed function, with the header
+`x-webhook-secret: <PUSH_WEBHOOK_SECRET>`. Without that header the endpoint is
+public and anyone could make it fan out notifications.
+
+### The iPhone caveat
+
+Safari only delivers Web Push to a site the user has **added to their Home
+Screen**. An iPhone user browsing to the Pages URL gets nothing until they tap
+Share, then Add to Home Screen. There is no way around this from code, which is
+why the Account screen labels the install button "Add to Home Screen (needed
+for alerts)" on iOS. Android Chrome and Firefox need no install.
+
+### Worth checking on first deploy
+
+The function uses `npm:web-push` for the RFC 8291 payload encryption, relying
+on Deno's Node compatibility for `node:crypto`. That is the pragmatic choice
+over hand-rolling the encryption, but it is the part most likely to need
+attention on first deploy. Send yourself one notification before trusting it.
