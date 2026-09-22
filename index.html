@@ -1256,10 +1256,10 @@ function renderSwaps(){
 // so every member sees a real map of the bay either way.
 const GOOGLE_MAPS_API_KEY = '';
 
-// The map screen was gated behind Swap Plus. It is open during the testing
-// round so people can actually find a bay. Set this back to true when Plus
-// launches, if the live map is still meant to be a paid benefit.
-const MAP_PLUS_GATED = false;
+// The map screen stays behind Swap Plus for the beta. Looking up where a bay
+// is does not depend on it: tapping a bay number in the feed opens that bay
+// on a real map. Set this to false to open the map screen to everyone.
+const MAP_PLUS_GATED = true;
 
 // A real, live, scrollable map centred on one bay. Google when a key is
 // configured, otherwise OpenStreetMap, which is keyless and shows a marker.
@@ -1784,10 +1784,19 @@ function renderMap(){
     <div class="pin-popover" id="pinPopover"></div>
   `;
 
-  // Unlocked for the testing round. The overview stays schematic, but tapping
-  // a pin shows that bay on a real map, which is the part people actually
-  // need. See MAP_PLUS_GATED in the notes above.
-  wrap.innerHTML = `<div class="map-radius-bar">${radiusChipsHTML(true)}</div>` + svg;
+  if(MAP_PLUS_GATED && !state.isPlus){
+    wrap.innerHTML = svg + `
+      <div class="map-lock-overlay">
+        <div class="lock-badge">${ICONS.lock}</div>
+        <h3>See every swap near you</h3>
+        <p>The live map is part of Swap Plus, powered by Google Maps and Apple Maps- currently in beta.</p>
+        <button class="btn btn-outline" onclick="subscribe()">Notify me when it launches</button>
+        <span class="map-price">Launching soon- everyone's on Basic for now</span>
+      </div>`;
+    wrap.querySelector('.map-svg').style.filter = 'blur(3px) saturate(0.7)';
+  } else {
+    wrap.innerHTML = `<div class="map-radius-bar">${radiusChipsHTML(true)}</div>` + svg;
+  }
 }
 
 /* ---------------- bay verification photo (illustrated stand-in) ---------------- */
@@ -2458,7 +2467,7 @@ function renderAccount(){
         ${state.isPlus ? '<span class="current-badge">Current plan</span>' : '<span class="beta-badge">Beta · Coming soon</span>'}
       </div>
       <ul class="plan-feats">
-        <li>${ICONS.check}<span><b>Live map</b> of every nearby bay <span style="color:var(--paint-dim);">(open to everyone during the testing round)</span></span></li>
+        <li>${ICONS.check}<span><b>Live map</b> of every nearby bay, powered by Google Maps and Apple Maps</span></li>
         <li>${ICONS.check}<span><b>Priority booking</b>- first in line on every swap</span></li>
         <li>${ICONS.check}<span>Access to Plus-only bays before anyone else</span></li>
       </ul>
