@@ -134,3 +134,15 @@ To make further schema changes: open the project's SQL Editor at
 supabase.com/dashboard and paste in whatever changed, or use a Supabase MCP
 connection pointed at *this* project (ref `woxumfxyghqpesooobjq`) once one is
 available in a future session.
+
+## Pending migrations
+
+`schema.sql` is the intended state. Anything in `migrations/` is a change that
+has been written and committed but **not yet applied to the live project**.
+Paste it into the SQL Editor and run it, then it can be considered part of the
+baseline.
+
+- `migrations/2026-09-22-swap-request-coordinates.sql`- adds `area`, `lat` and
+  `lng` to `my_swap_requests()`, so "Navigate to this bay" can drop a pin on
+  the bay rather than the street. The app ships fine without it and falls back
+  to a street-name query until it is applied.
