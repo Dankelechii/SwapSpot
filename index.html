@@ -104,6 +104,21 @@
     font-size:13px; color:var(--paint-dim); flex:0 0 auto;
   }
   .location-select b{ color:var(--paint); font-weight:600; }
+  button.location-select{
+    width:calc(100% - 40px); border:none; font-family:inherit; text-align:left;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  button.location-select:active{ background:var(--asphalt-2); }
+
+  .place-list{ display:flex; flex-direction:column; gap:8px; }
+  .place-row{
+    width:100%; text-align:left; padding:11px 13px; border-radius:11px;
+    background:var(--asphalt-3); border:1.5px solid transparent; color:var(--paint);
+    font-family:inherit; font-size:13.5px; line-height:1.4; cursor:pointer;
+  }
+  .place-row:hover{ border-color:rgba(246,244,236,0.18); }
+  .place-row.active{ border-color:var(--curb); }
+  .place-row small{ display:block; color:var(--paint-dim); font-size:11.5px; margin-top:3px; }
 
   .section-label{
     font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
@@ -848,10 +863,10 @@
 
       <!-- HOME -->
       <div class="screen active" id="screen-home">
-        <div class="location-select">
-          <span>Near <b>Shoreditch, London</b></span>
+        <button class="location-select" id="locationBar" onclick="openLocation()" aria-label="Change the area you are looking in">
+          <span>Near <b id="locationLabel">Shoreditch, London</b></span>
           <span>▾</span>
-        </div>
+        </button>
         <div class="radius-row" id="radiusRow"></div>
         <div class="section-label" id="homeSectionLabel">Available now</div>
         <div class="ticket-list" id="listingList"></div>
@@ -956,6 +971,17 @@
           <button class="modal-close" onclick="closeRate()">✕</button>
         </div>
         <div id="rateBody"></div>
+      </div>
+    </div>
+
+    <!-- LOCATION MODAL -->
+    <div class="modal-overlay" id="locationModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>Where are you looking?</h3>
+          <button class="modal-close" onclick="closeLocation()">✕</button>
+        </div>
+        <div id="locationBody"></div>
       </div>
     </div>
 
@@ -1073,11 +1099,17 @@ const LOCAL_DEMO_LISTINGS = [
 // Real listings (from Supabase) replace this array's contents once fetched;
 // it starts as the local demo set so the UI has something to render before
 // the first fetch completes, and falls back to it if the backend is down.
-let listings = LOCAL_DEMO_LISTINGS.map(l => ({...l}));
+let listings = LOCAL_DEMO_LISTINGS.map(l => ({...l, baseMi: l.mi}));
 
-// Fixed reference point (Shoreditch High St) used to compute a real distance
-// for real listings, since there's no user geolocation in this build yet.
-const SEARCH_ORIGIN = { lat: 51.5228, lng: -0.0791 };
+// Where the member is looking from. Distances, the radius chips and the map
+// rings are all measured from here. It starts on Shoreditch High St because
+// that is where the seeded bays are, and moves wherever the member sets it.
+const DEFAULT_ORIGIN = { lat: 51.5228, lng: -0.0791, label: 'Shoreditch, London' };
+function currentOrigin(){ return state.origin || DEFAULT_ORIGIN; }
+function isDefaultOrigin(){
+  const o = currentOrigin();
+  return Math.abs(o.lat - DEFAULT_ORIGIN.lat) < 1e-6 && Math.abs(o.lng - DEFAULT_ORIGIN.lng) < 1e-6;
+}
 function haversineMiles(lat1, lng1, lat2, lng2){
   if(lat1==null || lng1==null || lat2==null || lng2==null) return null;
   const R = 3958.8; // miles
@@ -1123,7 +1155,8 @@ async function fetchListings(){
     const { data, error } = await sb.rpc('browse_listings');
     if(error) throw error;
     listings = (data || []).map(row => {
-      const mi = haversineMiles(SEARCH_ORIGIN.lat, SEARCH_ORIGIN.lng, row.lat, row.lng);
+      const o = currentOrigin();
+      const mi = haversineMiles(o.lat, o.lng, row.lat, row.lng);
       return {
         id: row.id,
         bay: row.bay_number,
@@ -1160,7 +1193,7 @@ const COST_PREMIUM = 10;
 const COST_STANDARD = 5;
 const DURATION_OPTIONS = Array.from({length:12}, (_,i) => `${i+1} hour${i+1>1?'s':''}`);
 
-let state = { screen:'home', isPlus:false, mySwaps:[], radius:1 };
+let state = { screen:'home', isPlus:false, mySwaps:[], radius:1, origin:null };
 let user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
 let obStep = 1;
 let obMode = 'signup'; // 'signup' | 'signin'
@@ -1225,6 +1258,13 @@ function setRadius(r){
 }
 
 function renderHome(){
+  // Cheap and idempotent, and it covers the case a saved origin is restored
+  // from a previous visit: state comes back, but nothing has recomputed the
+  // distances against it yet.
+  recomputeDistances();
+  const originLabel = currentOrigin().label;
+  const labelEl = document.getElementById('locationLabel');
+  if(labelEl) labelEl.textContent = originLabel;
   document.getElementById('radiusRow').innerHTML = radiusChipsHTML(false);
   const inRange = listings.filter(l => l.mi <= state.radius);
   const radiusLabel = state.radius < 1 ? state.radius*1000+'m' : state.radius+' mi';
@@ -1235,7 +1275,7 @@ function renderHome(){
       <div class="empty-state">
         ${ICONS.car}
         <h3>No one's lending this close</h3>
-        <p>Nobody within ${radiusLabel} of Shoreditch has put a bay in right now. Try a wider radius- or be the one who lends.</p>
+        <p>Nobody within ${radiusLabel} of ${escapeHtml(originLabel)} has put a bay in right now. Try a wider radius, somewhere else- or be the one who lends.</p>
         <button class="btn btn-outline" onclick="lendMyBay()" style="margin-top:6px;">Lend my bay</button>
       </div>`;
     return;
@@ -2104,6 +2144,7 @@ function updateOfferBadges(){
 setInterval(tickOffers, 3000);
 
 function renderMap(){
+  recomputeDistances();
   const wrap = document.getElementById('mapWrap');
   const CX = 180, CY = 260, PX_PER_MI = 42, MAX_PX = 250, MIN_PX = 26;
 
@@ -2310,7 +2351,7 @@ function resetToLanding(){
   user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
   state.mySwaps = [];
   ownerInboxRequests = [];
-  listings = LOCAL_DEMO_LISTINGS.map(l => ({...l}));
+  listings = LOCAL_DEMO_LISTINGS.map(l => ({...l, baseMi: l.mi}));
   try{ localStorage.removeItem(STORAGE_KEY); } catch(e){}
   document.getElementById('appShell').style.display = 'none';
   obStep = 1; obMode = 'signup'; awaitingConfirmation = false;
@@ -2798,6 +2839,186 @@ async function fetchMyRating(){
     // the migration may not be applied yet; the profile just shows "New member"
     console.warn('member_rating unavailable', e);
   }
+}
+
+/* ---------------- where you are looking ----------------
+   The area bar used to be decoration: a fixed "Near Shoreditch, London" with
+   a chevron that did nothing. It now sets the point every distance in the app
+   is measured from, so the radius chips, the feed and the map rings all move
+   with it. */
+
+// A few places to tap instead of type. Deliberately spread across the UK: the
+// app is not a London app, it just has London bays in it so far.
+const QUICK_AREAS = [
+  { label:'Shoreditch, London', lat:51.5228, lng:-0.0791 },
+  { label:'Camden, London',     lat:51.5390, lng:-0.1426 },
+  { label:'Manchester centre',  lat:53.4794, lng:-2.2453 },
+  { label:'Birmingham centre',  lat:52.4796, lng:-1.9026 },
+  { label:'Leeds centre',       lat:53.7975, lng:-1.5418 },
+  { label:'Bristol centre',     lat:51.4537, lng:-2.5973 },
+  { label:'Edinburgh New Town', lat:55.9533, lng:-3.1975 },
+];
+
+let locQuery = '', locResults = null, locError = '', locBusy = false;
+
+// The demo listings carry an authored distance, because those values are what
+// make the surge and premium pricing demo read sensibly. They are kept while
+// you are still at the default origin, and only recomputed from coordinates
+// once you have actually moved. Real listings always come from coordinates.
+function recomputeDistances(){
+  const o = currentOrigin();
+  const atDefault = isDefaultOrigin();
+  listings.forEach(l => {
+    if(atDefault && l.baseMi != null){ l.mi = l.baseMi; return; }
+    const mi = haversineMiles(o.lat, o.lng, l.lat, l.lng);
+    if(mi != null) l.mi = Math.round(mi * 100) / 100;
+  });
+}
+
+function setOrigin(o){
+  state.origin = { lat: o.lat, lng: o.lng, label: o.label };
+  recomputeDistances();
+  saveState();
+  renderHome();
+  if(state.screen === 'map') renderMap();
+}
+
+function openLocation(){
+  locQuery = ''; locResults = null; locError = ''; locBusy = false;
+  renderLocationBody();
+  document.getElementById('locationModal').classList.add('show');
+  setTimeout(() => { const i = document.getElementById('locQuery'); if(i) i.focus(); }, 60);
+}
+
+function closeLocation(){
+  document.getElementById('locationModal').classList.remove('show');
+}
+
+function renderLocationBody(){
+  const body = document.getElementById('locationBody');
+  if(!body) return;
+  const o = currentOrigin();
+  body.innerHTML = `
+    <div class="ob-sub" style="margin-bottom:14px;">Every distance in the app is measured from here. Right now that is <b style="color:var(--paint);">${escapeHtml(o.label)}</b>.</div>
+    <div class="field">
+      <label>Town, postcode or area</label>
+      <input type="text" id="locQuery" placeholder="Camden, or SW1A 1AA" value="${escapeHtml(locQuery)}"
+             oninput="locQuery = this.value"
+             onkeydown="if(event.key === 'Enter'){ event.preventDefault(); runPlaceSearch(); }">
+    </div>
+    <button class="btn btn-plus btn-block" onclick="runPlaceSearch()" ${locBusy ? 'disabled' : ''}>${locBusy ? 'Searching...' : 'Search'}</button>
+    <button class="btn btn-outline btn-block" id="locGeoBtn" style="margin-top:8px;" onclick="useMyLocation()">Use my current location</button>
+    ${locError ? `<div class="ob-sub" style="color:var(--meter); margin:12px 0 0;">${escapeHtml(locError)}</div>` : ''}
+    ${locResults
+      ? (locResults.length
+        ? `<div class="section-label" style="padding:16px 0 8px;">Results</div>
+           <div class="place-list">
+             ${locResults.map((r, i) => `<button class="place-row" onclick="pickPlace(${i})">${escapeHtml(r.label)}<small>${escapeHtml(r.detail)}</small></button>`).join('')}
+           </div>`
+        : `<div class="ob-sub" style="margin-top:14px;">Nothing found for that. Try a town, a postcode, or a London area.</div>`)
+      : `<div class="section-label" style="padding:16px 0 8px;">Or jump to</div>
+         <div class="place-list">
+           ${QUICK_AREAS.map((a, i) => `<button class="place-row ${a.label === o.label ? 'active' : ''}" onclick="pickQuick(${i})">${escapeHtml(a.label)}</button>`).join('')}
+         </div>`}
+    <div class="demo-note" style="margin-top:14px;">Search comes from OpenStreetMap, the same source as the bay map. Most bays are around Shoreditch so far, so somewhere far off will look empty until a member there lends one.</div>
+  `;
+}
+
+// Nominatim is OpenStreetMap's own geocoder- keyless, so there is nothing to
+// configure, and it is already the map's data source. Their usage policy asks
+// for no per-keystroke lookups, so this only runs when you press Search.
+async function searchPlaces(q){
+  const url = 'https://nominatim.openstreetmap.org/search'
+    + '?format=jsonv2&addressdetails=1&limit=6&countrycodes=gb&q=' + encodeURIComponent(q);
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if(!res.ok) throw new Error(`the search service answered ${res.status}`);
+  return (await res.json()).map(r => ({
+    label: shortPlaceName(r),
+    detail: String(r.display_name || '').split(',').map(t => t.trim()).slice(0, 4).join(', '),
+    lat: Number(r.lat),
+    lng: Number(r.lon),
+  })).filter(r => isFinite(r.lat) && isFinite(r.lng));
+}
+
+// display_name is a long postal address. Members recognise "Camden, London",
+// not "Camden Town, London Borough of Camden, Greater London, England, ...".
+function shortPlaceName(r){
+  const a = r.address || {};
+  const first = r.name || a.suburb || a.neighbourhood || a.village || a.town || a.city || a.county;
+  const second = a.city || a.town || a.county || a.state;
+  if(first && second && second !== first) return `${first}, ${second}`;
+  return first || String(r.display_name || 'That place').split(',')[0];
+}
+
+async function reverseGeocode(lat, lng){
+  const url = 'https://nominatim.openstreetmap.org/reverse'
+    + `?format=jsonv2&addressdetails=1&zoom=14&lat=${lat}&lon=${lng}`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if(!res.ok) return null;
+  return shortPlaceName(await res.json());
+}
+
+async function runPlaceSearch(){
+  const input = document.getElementById('locQuery');
+  const q = (input ? input.value : locQuery).trim();
+  locQuery = q;
+  if(q.length < 2){
+    locError = 'Type at least two characters.'; locResults = null;
+    renderLocationBody(); return;
+  }
+  locBusy = true; locError = ''; renderLocationBody();
+  try{
+    locResults = await searchPlaces(q);
+  } catch(e){
+    locResults = null;
+    locError = `Could not search: ${e.message || e}. Pick one of the areas below instead.`;
+  }
+  locBusy = false;
+  renderLocationBody();
+}
+
+function pickPlace(i){
+  const r = locResults && locResults[i];
+  if(!r) return;
+  setOrigin(r);
+  closeLocation();
+  showToast(`Looking near ${r.label}`, 3000);
+}
+
+function pickQuick(i){
+  const a = QUICK_AREAS[i];
+  if(!a) return;
+  setOrigin(a);
+  closeLocation();
+  showToast(`Looking near ${a.label}`, 3000);
+}
+
+function useMyLocation(){
+  const btn = document.getElementById('locGeoBtn');
+  if(!navigator.geolocation){
+    locError = 'This browser will not share a location. Search for an area instead.';
+    renderLocationBody(); return;
+  }
+  if(btn){ btn.disabled = true; btn.textContent = 'Finding you...'; }
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      let label = 'My location';
+      try{ label = (await reverseGeocode(lat, lng)) || label; }
+      catch(e){ /* the fix is what matters- a plain label is fine */ }
+      setOrigin({ lat, lng, label });
+      closeLocation();
+      showToast(`Looking near ${label}`, 3000);
+    },
+    err => {
+      if(btn){ btn.disabled = false; btn.textContent = 'Use my current location'; }
+      locError = err.code === 1
+        ? 'Location permission was declined. Search for an area instead.'
+        : 'Could not get a location fix. Search for an area instead.';
+      renderLocationBody();
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+  );
 }
 
 /* ---------------- ratings this member has given ----------------

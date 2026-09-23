@@ -88,9 +88,14 @@ Deliberately not done yet:
   so a tester who wants to test *listing* (rather than just browsing and
   requesting) needs approving first. This was a deliberate call over building
   a fake self-approval flow.
-- **Real geosearch.** There's no user geolocation yet. Distances are computed
-  client-side with the Haversine formula against a fixed reference point
-  (Shoreditch High St), and the server's `is_near` check is stubbed to `false`.
+- **Real geosearch.** You can now set the area you're looking from- search a
+  town, postcode or area (geocoded by OpenStreetMap's Nominatim, no API key),
+  jump to one of a few UK presets, or use your device location- and every
+  distance and radius moves with it. What's still not real: distances are
+  computed client-side with the Haversine formula rather than in the database,
+  so the whole feed is fetched and then filtered in the browser, and the
+  server's `is_near` check is still stubbed to `false`. That's fine at this
+  size and wrong at a few thousand listings.
 - **Listing expiry.** The `expired` status exists as a value but no scheduled
   job flips it yet.
 - **Terms & Conditions** are a legal draft pending solicitor review, not final.
