@@ -2538,7 +2538,7 @@ function renderOnboarding(){
       <div class="ob-sub">Other members see this when they're deciding whether to swap with you.</div>
       <div class="avatar-upload-wrap">
         <div class="avatar-big" onclick="triggerAvatarUpload()">
-          ${user.avatar ? `<img src="${user.avatar}">` : (escapeHtml(initials(user.name)) || 'JD')}
+          ${user.avatar ? `<img src="${escapeHtml(user.avatar)}">` : (escapeHtml(initials(user.name)) || 'JD')}
           <div class="avatar-cam">${ICONS.camera}</div>
         </div>
         <span class="avatar-hint">${user.avatar ? 'Tap to change photo' : 'Tap the circle to upload a photo'}</span>
