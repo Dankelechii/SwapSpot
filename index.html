@@ -110,6 +110,37 @@
   }
   button.location-select:active{ background:var(--asphalt-2); }
 
+  .fav-btn{
+    background:none; border:none; padding:2px; cursor:pointer; flex:0 0 auto;
+    color:var(--paint-dim); display:inline-flex; align-items:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .fav-btn svg{ width:15px; height:15px; }
+  .fav-btn.on{ color:var(--curb); }
+  .fav-btn:active{ transform:scale(0.88); }
+  .fav-btn.inline{ vertical-align:-3px; margin-left:2px; }
+  .fav-btn.inline svg{ width:13px; height:13px; }
+
+  .saved-list{ display:flex; flex-direction:column; gap:8px; padding:0 20px; }
+  .saved-row{
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:11px 13px; border-radius:11px; background:var(--asphalt-3);
+    color:var(--paint); font-size:13.5px; line-height:1.4;
+  }
+  .saved-row.sub{ margin-left:18px; background:var(--asphalt-2); }
+  .sr-main{ flex:1 1 auto; min-width:0; }
+  .sr-bay{ font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:0.03em; }
+  .sr-main small{
+    display:block; color:var(--paint-dim); font-size:11.5px; margin-top:2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .sr-act{
+    flex:0 0 auto; background:none; border:1.5px solid rgba(246,244,236,0.24);
+    border-radius:8px; color:var(--paint); font-family:'IBM Plex Mono',monospace;
+    font-size:10px; font-weight:600; letter-spacing:0.03em; padding:6px 9px; cursor:pointer;
+  }
+  .sr-act:disabled{ opacity:0.4; cursor:default; }
+
   .place-list{ display:flex; flex-direction:column; gap:8px; }
   .place-row{
     width:100%; text-align:left; padding:11px 13px; border-radius:11px;
@@ -889,6 +920,8 @@
         <div class="profile-row" id="profileRow"></div>
         <div class="section-label">Credits</div>
         <div id="creditsCard"></div>
+        <div class="section-label">Saved</div>
+        <div id="savedBlock"></div>
         <div class="section-label">Your bay verification</div>
         <div class="verify-block-inline" id="accountVerifyBlock" style="padding:0 20px;"></div>
         <div style="padding:8px 20px 0;">
@@ -1122,6 +1155,11 @@ function haversineMiles(lat1, lng1, lat2, lng2){
 // UUIDs can't be dropped straight into an inline onclick="fn(${id})"- this
 // renders the right JS literal (quoted string vs bare number) for either.
 function jsId(id){ return typeof id === 'string' ? `'${id.replace(/'/g,"\\'")}'` : id; }
+// jsId() produces a JS literal. Inside an HTML attribute that literal still has
+// to survive the HTML parser first: a quote in the value would close the
+// attribute early and everything after it would be parsed as markup. Use this
+// for any id that is not guaranteed to be a uuid or a number.
+function attrJsId(id){ return escapeHtml(jsId(id)); }
 // bayPhotoSVG()'s illustration is procedurally seeded from a numeric id-
 // this turns a uuid into a stable number so real listings still get one.
 function hashId(id){
@@ -1193,7 +1231,7 @@ const COST_PREMIUM = 10;
 const COST_STANDARD = 5;
 const DURATION_OPTIONS = Array.from({length:12}, (_,i) => `${i+1} hour${i+1>1?'s':''}`);
 
-let state = { screen:'home', isPlus:false, mySwaps:[], radius:1, origin:null };
+let state = { screen:'home', isPlus:false, mySwaps:[], radius:1, origin:null, favBays:[], favMembers:[] };
 let user = { name:'', email:'', avatar:null, bill:null, verification:'unverified', credits:0, creditLog:[], everSubscribed:false, plusGrant:{ active:false, remaining:0, amount:0, expiresAt:null } };
 let obStep = 1;
 let obMode = 'signup'; // 'signup' | 'signin'
@@ -1226,14 +1264,17 @@ function ticketCard(l, opts={}){
   <div class="ticket ${locked?'locked':''}">
     <div class="ticket-main">
       <div class="ticket-row">
-        <button class="bay-number bay-locate" onclick="navigateToListing(${jsId(l.id)})" title="Where is this bay?">${l.bay}${ICONS.mappin}</button>
+        <button class="bay-number bay-locate" onclick="navigateToListing(${attrJsId(l.id)})" title="Where is this bay?">${escapeHtml(l.bay)}${ICONS.mappin}</button>
         <span class="status-dot ${l.priority?'priority':''}"></span>
         <span class="status-text ${l.priority?'priority':''}">${l.priority ? 'Plus priority' : 'Available'}</span>
         <span class="watchers ${hot?'hot':''}" id="watch-${l.id}">${hot?ICONS.flame:ICONS.person}<span>${l.offers}</span></span>
+        <button class="fav-btn ${isFavBay(l.id)?'on':''}" onclick="toggleFavBay(${attrJsId(l.id)})"
+                aria-label="${isFavBay(l.id) ? 'Remove this bay from saved' : 'Save this bay'}"
+                title="${isFavBay(l.id) ? 'Saved- tap to remove' : 'Save this bay'}">${starHTML(isFavBay(l.id))}</button>
       </div>
-      <button class="ticket-street-link" onclick="openBayPhoto(${jsId(l.id)})">${l.street}${ICONS.camera}</button>
-      <div class="ticket-time">${l.time} · ${l.mi} mi away</div>
-      <div class="ticket-swapper">Swap with <b>${l.owner}</b> ${l.ownerVerified === false ? '' : `<span class="verified-badge">${ICONS.shield}Verified</span>`}</div>
+      <button class="ticket-street-link" onclick="openBayPhoto(${attrJsId(l.id)})">${escapeHtml(l.street)}${ICONS.camera}</button>
+      <div class="ticket-time">${escapeHtml(l.time)} · ${l.mi} mi away</div>
+      <div class="ticket-swapper">Swap with <b>${escapeHtml(l.owner)}</b> ${l.ownerVerified === false ? '' : `<span class="verified-badge">${ICONS.shield}Verified</span>`}<button class="fav-btn inline ${isFavMember(memberKey(l))?'on':''}" onclick="toggleFavMember(${attrJsId(memberKey(l))})" aria-label="${isFavMember(memberKey(l)) ? 'Remove this member from saved' : 'Save this member'}" title="${isFavMember(memberKey(l)) ? 'Saved member- tap to remove' : 'Save this member'}">${starHTML(isFavMember(memberKey(l)))}</button></div>
       <div class="cost-line ${premium?'premium':''}" id="cost-${l.id}">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
     </div>
     <div class="ticket-stub">
@@ -1336,7 +1377,7 @@ function renderSwaps(){
               <span class="status-text" style="color:${color}">${s.status}</span>
             </div>
             <div class="ticket-street">${escapeHtml(s.street)}</div>
-            <div class="ticket-time">${s.time ? s.time + ' · ' : ''}${s.duration}</div>
+            <div class="ticket-time">${s.time ? escapeHtml(s.time) + ' · ' : ''}${escapeHtml(s.duration)}</div>
             <div class="ticket-swapper">Swap with <b>${escapeHtml(s.owner)}</b></div>
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
             <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
@@ -1565,8 +1606,8 @@ function renderBookingModal(){
   const premium = isNear(l) || isHot(l);
   const enough = user.credits >= cost;
   document.getElementById('bookingModalBody').innerHTML = `
-    <div class="bay-number" style="font-size:16px; margin-bottom:2px;">${l.bay} · ${l.street}</div>
-    <div class="ticket-time" style="margin-bottom:16px;">${l.time}</div>
+    <div class="bay-number" style="font-size:16px; margin-bottom:2px;">${escapeHtml(l.bay)} · ${escapeHtml(l.street)}</div>
+    <div class="ticket-time" style="margin-bottom:16px;">${escapeHtml(l.time)}</div>
 
     <div class="section-label" style="padding:0 0 8px;">How long do you need it <span style="text-transform:none; letter-spacing:0;">(up to 12 hours)</span></div>
     <select class="duration-select" onchange="setDuration(this.value)">
@@ -2071,7 +2112,7 @@ async function disableNotifications(){
 
 async function refreshBackendData(){
   if(!(backendReady && session)) return;
-  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox(), fetchMyRating(), fetchMyRatingsGiven()]);
+  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox(), fetchMyRating(), fetchMyRatingsGiven(), fetchFavourites()]);
   refreshAll();
   startRealtime();
 }
@@ -2263,7 +2304,7 @@ function openBayPhoto(id){
   document.getElementById('bayPhotoTitle').textContent = `${l.bay} · ${l.street}`;
   document.getElementById('bayPhotoBody').innerHTML = `
     <div class="bay-photo-frame">${bayPhotoSVG(l)}</div>
-    <div class="bay-photo-caption">Uploaded by <b>${l.owner}</b> during verification, showing the empty bay before it's swapped. ${l.ownerVerified === false ? '' : `<span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span>`}</div>
+    <div class="bay-photo-caption">Uploaded by <b>${escapeHtml(l.owner)}</b> during verification, showing the empty bay before it's swapped. ${l.ownerVerified === false ? '' : `<span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span>`}</div>
     <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${jsId(l.id)});">Request this bay</button>
   `;
   document.getElementById('bayPhotoModal').classList.add('show');
@@ -2386,13 +2427,13 @@ function showPin(id){
   const premium = near || hot;
   pop.innerHTML = `
     <div class="pin-popover-top">
-      <button class="ticket-street-link" style="font-size:14px;" onclick="openBayPhoto(${jsId(l.id)})">${l.bay} · ${l.street}${ICONS.camera}</button>
+      <button class="ticket-street-link" style="font-size:14px;" onclick="openBayPhoto(${attrJsId(l.id)})">${escapeHtml(l.bay)} · ${escapeHtml(l.street)}${ICONS.camera}</button>
       <span class="watchers ${hot?'hot':''}">${hot?ICONS.flame:ICONS.person}<span>${l.offers} offer${l.offers===1?'':'s'}</span></span>
     </div>
-    <div class="ticket-time" style="margin-bottom:6px;">${l.time} · ${l.mi} mi away</div>
+    <div class="ticket-time" style="margin-bottom:6px;">${escapeHtml(l.time)} · ${l.mi} mi away</div>
     <div class="cost-line ${premium?'premium':''}" style="margin:0 0 10px;">${ICONS.coin}<b>${cost} credits</b> to book${near?' · within 100m':(hot?' · surge':'')}</div>
     ${liveMapEmbed(l.lat, l.lng, 150)}
-    <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${jsId(l.id)})">Request this bay</button>
+    <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${attrJsId(l.id)})">Request this bay</button>
     <div style="margin-top:10px; text-align:center;">
       <button class="nav-link" onclick="navigateToListing(${jsId(l.id)})">${ICONS.car}Navigate to this bay</button>
     </div>
@@ -3021,6 +3062,179 @@ function useMyLocation(){
   );
 }
 
+/* ---------------- saved bays and members ----------------
+   A bay you liked is worth finding again, and so is the neighbour who lends
+   it. Both are kept as snapshots rather than bare ids, so a saved bay still
+   reads as "BAY 14A, Rivington St" on the account page even while nobody is
+   lending it and it is nowhere in the feed.
+
+   Real listings are uuids and real members are uuids, so those sync to the
+   backend and follow you to another device. Demo listings are numbers and
+   demo owners are names, which is why the key is built rather than assumed. */
+
+function favBays(){ if(!Array.isArray(state.favBays)) state.favBays = []; return state.favBays; }
+function favMembers(){ if(!Array.isArray(state.favMembers)) state.favMembers = []; return state.favMembers; }
+function isFavBay(id){ return favBays().some(f => f.id === id); }
+function isFavMember(key){ return favMembers().some(f => f.id === key); }
+
+// Real listings carry an owner uuid; the demo set only has a name.
+function memberKey(l){ return l.ownerId || l.owner; }
+
+function starHTML(on){
+  return `<svg viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="${STAR_PATH}"/></svg>`;
+}
+
+function toggleFavBay(id){
+  const list = favBays();
+  const i = list.findIndex(f => f.id === id);
+  if(i >= 0){
+    const gone = list.splice(i, 1)[0];
+    removeFavourite('listing', id);
+    showToast(`Removed ${gone.bay} from saved`, 2500);
+  } else {
+    const l = listings.find(x => x.id === id);
+    if(!l) return;
+    list.unshift({
+      id: l.id, bay: l.bay, street: l.street, area: l.area || '',
+      owner: l.owner, ownerId: l.ownerId || null, lat: l.lat, lng: l.lng,
+    });
+    addFavourite('listing', id, l.bay, l.street);
+    showToast(`Saved ${l.bay}- it's under Saved on your account`, 3500);
+  }
+  saveState();
+  renderHome();
+  renderAccount();
+}
+
+function toggleFavMember(key){
+  const list = favMembers();
+  const i = list.findIndex(f => f.id === key);
+  if(i >= 0){
+    const gone = list.splice(i, 1)[0];
+    removeFavourite('member', key);
+    showToast(`Removed ${gone.name} from saved`, 2500);
+  } else {
+    // The name is read from the feed rather than passed in, so a display name
+    // never has to survive a trip through an inline onclick attribute.
+    const l = listings.find(x => memberKey(x) === key);
+    const name = (l && l.owner) || 'This member';
+    list.unshift({ id: key, name });
+    addFavourite('member', key, name, null);
+    showToast(`Saved ${name}- their bays show under Saved on your account`, 3500);
+  }
+  saveState();
+  renderHome();
+  renderAccount();
+}
+
+/* The server copy. It is a mirror, not the source: every toggle has already
+   updated local state and re-rendered by the time these run, so a missing
+   table or a dropped connection costs you the sync, never the interaction. */
+
+async function addFavourite(kind, targetId, label, sublabel){
+  if(!(backendReady && session) || typeof targetId !== 'string') return;
+  try{
+    const { error } = await sb.from('favourites').upsert({
+      user_id: session.user.id, kind, target_id: targetId,
+      label: label || '', sublabel: sublabel || null,
+    });
+    if(error) throw error;
+  } catch(e){ console.warn('favourites unavailable', e); }
+}
+
+async function removeFavourite(kind, targetId){
+  if(!(backendReady && session) || typeof targetId !== 'string') return;
+  try{
+    const { error } = await sb.from('favourites').delete()
+      .eq('user_id', session.user.id).eq('kind', kind).eq('target_id', targetId);
+    if(error) throw error;
+  } catch(e){ console.warn('favourites unavailable', e); }
+}
+
+async function fetchFavourites(){
+  if(!(backendReady && session)) return;
+  try{
+    const { data, error } = await sb.from('favourites')
+      .select('kind, target_id, label, sublabel')
+      .order('created_at', { ascending: false });
+    if(error) throw error;
+    const rows = data || [];
+    state.favBays = rows.filter(r => r.kind === 'listing')
+      .map(r => ({ id: r.target_id, bay: r.label, street: r.sublabel || '', owner: '', ownerId: null }));
+    state.favMembers = rows.filter(r => r.kind === 'member')
+      .map(r => ({ id: r.target_id, name: r.label }));
+  } catch(e){
+    // the favourites migration may not be applied yet; local state still works
+    console.warn('favourites unavailable', e);
+  }
+}
+
+// A saved row keeps the label it was saved with, but the live feed knows
+// better: a bay may have been renamed, or come back with an owner attached.
+function hydrateFavourites(){
+  favBays().forEach(f => {
+    const l = listings.find(x => x.id === f.id);
+    if(!l) return;
+    f.bay = l.bay; f.street = l.street; f.owner = l.owner;
+    f.ownerId = l.ownerId || f.ownerId; f.lat = l.lat; f.lng = l.lng; f.area = l.area || f.area;
+  });
+}
+
+function renderSaved(){
+  const el = document.getElementById('savedBlock');
+  if(!el) return;
+  hydrateFavourites();
+  const bays = favBays(), members = favMembers();
+
+  if(!bays.length && !members.length){
+    el.innerHTML = `<div class="demo-note" style="margin:0 20px;">Nothing saved yet. Tap the star on a bay to keep it here, and the star by a neighbour's name to keep theirs- so the next time you need that spot you are not hunting for it.</div>`;
+    return;
+  }
+
+  const isLive = id => listings.some(l => l.id === id);
+
+  const bayRow = (f, sub) => `
+    <div class="saved-row ${sub ? 'sub' : ''}">
+      <button class="fav-btn on" onclick="toggleFavBay(${attrJsId(f.id)})" aria-label="Remove ${escapeHtml(f.bay)} from saved" title="Remove from saved">${starHTML(true)}</button>
+      <div class="sr-main">
+        <span class="sr-bay">${escapeHtml(f.bay)}</span>
+        <small>${escapeHtml(f.street || '')}${f.owner ? ' · ' + escapeHtml(f.owner) : ''}</small>
+      </div>
+      ${isLive(f.id)
+        ? `<button class="sr-act" onclick="openBookingModal(${attrJsId(f.id)})">Request</button>`
+        : `<button class="sr-act" disabled title="Nobody is lending this one right now">Not lent</button>`}
+    </div>`;
+
+  const baysHTML = bays.length ? `
+    <div class="saved-list">${bays.map(f => bayRow(f, false)).join('')}</div>` : '';
+
+  const membersHTML = members.length ? `
+    <div class="section-label" style="padding-top:${bays.length ? '14px' : '0'};">Saved members</div>
+    <div class="saved-list">
+      ${members.map(m => {
+        const theirs = listings.filter(l => memberKey(l) === m.id);
+        return `
+        <div class="saved-row">
+          <button class="fav-btn on" onclick="toggleFavMember(${attrJsId(m.id)})" aria-label="Remove ${escapeHtml(m.name)} from saved" title="Remove from saved">${starHTML(true)}</button>
+          <div class="sr-main">
+            ${escapeHtml(m.name)}
+            <small>${theirs.length ? `${theirs.length} bay${theirs.length === 1 ? '' : 's'} lent right now` : 'No bays lent right now'}</small>
+          </div>
+        </div>
+        ${theirs.map(l => `
+        <div class="saved-row sub">
+          <div class="sr-main">
+            <span class="sr-bay">${escapeHtml(l.bay)}</span>
+            <small>${escapeHtml(l.street)} · ${l.mi} mi away</small>
+          </div>
+          <button class="sr-act" onclick="openBookingModal(${attrJsId(l.id)})">Request</button>
+        </div>`).join('')}`;
+      }).join('')}
+    </div>` : '';
+
+  el.innerHTML = baysHTML + membersHTML;
+}
+
 /* ---------------- ratings this member has given ----------------
    Keyed by swap request, not stored as a flag on each swap. fetchMySwaps()
    rebuilds state.mySwaps from the server on every refresh, so a flag written
@@ -3217,6 +3431,7 @@ function renderAccount(){
       ${ratingHTML(user.rating)}
       <button class="profile-edit" onclick="openEditProfile()">Edit profile</button>
     </div>`;
+  renderSaved();
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
 
   const installBtn = document.getElementById('installBtn');
@@ -3296,7 +3511,7 @@ function renderAccount(){
       <div class="credit-log">
         ${user.creditLog.length === 0
           ? `<span class="credit-log-empty">No activity yet- swap a bay to start earning.</span>`
-          : user.creditLog.slice(0,5).map(c => `<div class="credit-log-row"><span>${c.label}</span><span class="amt" style="color:${c.amount<0?'var(--meter)':'var(--signal)'};">${c.amount>=0?'+':''}${c.amount}</span></div>`).join('')
+          : user.creditLog.slice(0,5).map(c => `<div class="credit-log-row"><span>${escapeHtml(c.label)}</span><span class="amt" style="color:${c.amount<0?'var(--meter)':'var(--signal)'};">${c.amount>=0?'+':''}${c.amount}</span></div>`).join('')
         }
       </div>
     </div>`;
