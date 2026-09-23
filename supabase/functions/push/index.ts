@@ -8,7 +8,7 @@
 //   UPDATE to confirmed/declined-> the requester ("your request was decided")
 //
 // Secrets to set on the project (Edge Functions -> Secrets):
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:you@example.com)
+//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:swapspot.uk@gmail.com)
 //   PUSH_WEBHOOK_SECRET (optional but recommended, see below)
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 
@@ -17,7 +17,7 @@ import webpush from "npm:web-push@3.6.7";
 
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
-const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:hello@swapspot.example";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:swapspot.uk@gmail.com";
 const WEBHOOK_SECRET = Deno.env.get("PUSH_WEBHOOK_SECRET") ?? "";
 
 // Service role: this function reads other members' subscriptions on purpose,
