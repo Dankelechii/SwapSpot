@@ -1280,7 +1280,7 @@ function ticketCard(l, opts={}){
     <div class="ticket-stub">
       ${locked
         ? `<div class="stub-btn locked-stub">${ICONS.lock}Plus only</div>`
-        : `<button class="stub-btn" onclick="openBookingModal(${jsId(l.id)})">${ICONS.swap}Request</button>`
+        : `<button class="stub-btn" onclick="openBookingModal(${attrJsId(l.id)})">${ICONS.swap}Request</button>`
       }
     </div>
   </div>`;
@@ -1374,17 +1374,17 @@ function renderSwaps(){
             <div class="ticket-row">
               <span class="bay-number">${escapeHtml(s.bay)}</span>
               <span class="status-dot" style="background:${color}"></span>
-              <span class="status-text" style="color:${color}">${s.status}</span>
+              <span class="status-text" style="color:${color}">${escapeHtml(s.status)}</span>
             </div>
             <div class="ticket-street">${escapeHtml(s.street)}</div>
             <div class="ticket-time">${s.time ? escapeHtml(s.time) + ' · ' : ''}${escapeHtml(s.duration)}</div>
             <div class="ticket-swapper">Swap with <b>${escapeHtml(s.owner)}</b></div>
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
             <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
-              <button class="nav-link" onclick="navigateToSwap(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.car}Navigate to this bay</button>
+              <button class="nav-link" onclick="navigateToSwap(${s.key !== undefined ? s.key : attrJsId(s.id)})">${ICONS.car}Navigate to this bay</button>
               ${(s.creditsSettled && !declined) ? (ratedStars(s)
                 ? `<span class="rating"><span class="rating-count">You rated this swap</span>${starsHTML(ratedStars(s))}</span>`
-                : `<button class="nav-link" onclick="openRate(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.shield}Rate this swap</button>`) : ''}
+                : `<button class="nav-link" onclick="openRate(${s.key !== undefined ? s.key : attrJsId(s.id)})">${ICONS.shield}Rate this swap</button>`) : ''}
             </div>
             ${footer}
           </div>
@@ -1774,7 +1774,7 @@ function renderOwnerInbox(){
             <div class="ticket-row">
               <span class="bay-number">${escapeHtml(r.bay_number)}</span>
               <span class="status-dot" style="background:${r.status==='pending'?'var(--curb)':(r.status==='confirmed'?'var(--signal)':'var(--meter)')}"></span>
-              <span class="status-text" style="color:${r.status==='pending'?'var(--curb)':(r.status==='confirmed'?'var(--signal)':'var(--meter)')}">${r.status}</span>
+              <span class="status-text" style="color:${r.status==='pending'?'var(--curb)':(r.status==='confirmed'?'var(--signal)':'var(--meter)')}">${escapeHtml(r.status)}</span>
             </div>
             <div class="ticket-street">${escapeHtml(r.street)}</div>
             <div class="ticket-swapper">Request from <b>${escapeHtml(r.requester_name)}</b> · ${r.duration_hours}h</div>
@@ -2262,10 +2262,11 @@ function seededRand(seed){
 function bayPhotoSVG(l){
   const seed = hashId(l.id);
   const rand = seededRand(seed * 977 + 13);
-  // This lands inside an SVG <text>, which innerHTML parses as markup exactly
-  // like the rest of the document: an unescaped bay number can close the
-  // element and open one with an event handler on it.
-  const code = escapeHtml(l.bay.replace('BAY ', ''));
+  // Escaped at each use below, not here: this lands inside an SVG <text>,
+  // which innerHTML parses as markup exactly like the rest of the document,
+  // so an unescaped bay number can close the element and open one carrying an
+  // event handler.
+  const code = l.bay.replace('BAY ', '');
   const tones = ['#2A2E33', '#2C3239', '#282D31'];
   const bg = tones[seed % tones.length];
   const speckles = Array.from({length: 10}, () => {
@@ -2276,13 +2277,13 @@ function bayPhotoSVG(l){
   const bracketStyle = seed % 2 === 0;
   const markings = bracketStyle ? `
     <rect x="66" y="36" width="268" height="188" rx="3" fill="none" stroke="#F6F4EC" stroke-width="7" opacity="0.92"/>
-    <text x="200" y="150" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="52" fill="#F6F4EC" opacity="0.85">${code}</text>
+    <text x="200" y="150" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="52" fill="#F6F4EC" opacity="0.85">${escapeHtml(code)}</text>
   ` : `
     <path d="M58,50 h46 M58,50 v46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
     <path d="M342,50 h-46 M342,50 v46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
     <path d="M58,210 h46 M58,210 v-46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
     <path d="M342,210 h-46 M342,210 v-46" stroke="#F6F4EC" stroke-width="7" fill="none" stroke-linecap="round"/>
-    <text x="200" y="152" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="46" fill="#F6F4EC" opacity="0.8">${code}</text>
+    <text x="200" y="152" text-anchor="middle" font-family="'Oswald',sans-serif" font-weight="700" font-size="46" fill="#F6F4EC" opacity="0.8">${escapeHtml(code)}</text>
   `;
 
   return `
@@ -2308,7 +2309,7 @@ function openBayPhoto(id){
   document.getElementById('bayPhotoBody').innerHTML = `
     <div class="bay-photo-frame">${bayPhotoSVG(l)}</div>
     <div class="bay-photo-caption">Uploaded by <b>${escapeHtml(l.owner)}</b> during verification, showing the empty bay before it's swapped. ${l.ownerVerified === false ? '' : `<span class="verified-badge" style="color:var(--signal);">${ICONS.shield}Verified</span>`}</div>
-    <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${jsId(l.id)});">Request this bay</button>
+    <button class="btn btn-plus btn-block" onclick="closeBayPhoto(); openBookingModal(${attrJsId(l.id)});">Request this bay</button>
   `;
   document.getElementById('bayPhotoModal').classList.add('show');
 }
@@ -2438,7 +2439,7 @@ function showPin(id){
     ${liveMapEmbed(l.lat, l.lng, 150)}
     <button class="btn btn-plus" style="width:100%;" onclick="openBookingModal(${attrJsId(l.id)})">Request this bay</button>
     <div style="margin-top:10px; text-align:center;">
-      <button class="nav-link" onclick="navigateToListing(${jsId(l.id)})">${ICONS.car}Navigate to this bay</button>
+      <button class="nav-link" onclick="navigateToListing(${attrJsId(l.id)})">${ICONS.car}Navigate to this bay</button>
     </div>
   `;
   pop.classList.add('show');
@@ -2808,7 +2809,7 @@ function renderVerifyBlock(){
   }
   const fileRow = user.bill ? `
     <div class="file-chip">
-      ${user.bill.dataUrl ? `<img class="thumb" src="${user.bill.dataUrl}">` : `<div class="thumb doc">${ICONS.doc}</div>`}
+      ${user.bill.dataUrl ? `<img class="thumb" src="${escapeHtml(user.bill.dataUrl)}">` : `<div class="thumb doc">${ICONS.doc}</div>`}
       <span class="fname">${escapeHtml(user.bill.name)}${user.bill.uploading ? ' · uploading…' : ''}</span>
       <button class="fremove" onclick="removeBill()">✕</button>
     </div>` : '';

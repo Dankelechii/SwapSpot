@@ -65,6 +65,31 @@ No build step. Either:
 - Use the GitHub Pages deploy at https://dankelechii.github.io/SwapSpot/
   (Settings → Pages → deploy from the `main` branch, root folder)
 
+## Checks
+
+The whole UI is built by assigning template literals to `innerHTML`, and the
+values in them come from other members- display names, bay numbers, street
+names. That is a standing invitation to cross-site scripting, and three of
+them got through: a display name, a bay number inside the bay photo SVG, and
+an avatar URL. Two were live.
+
+`tools/check-escaping.js` makes that class of bug fail rather than get read
+past. It scans every template that produces markup and requires each `${...}`
+to be wrapped in `escapeHtml()` or `attrJsId()`, or to appear in
+`tools/escaping-allowlist.json`, a reviewed list of things that cannot carry
+member text: numbers, class names, literal-only ternaries.
+
+```
+node tools/check-escaping.js          # exits non-zero on anything unescaped
+node tools/check-escaping.js --list   # every interpolation and its verdict
+node tools/check-escaping.test.js     # that the checker still catches the real bugs
+```
+
+Both run on every push and pull request- see `.github/workflows/checks.yml`.
+
+Adding a line to the allowlist is a decision, not a formality: it says that
+expression can never hold text a member typed. Read the diff.
+
 ## What's real, and what isn't yet
 
 Real and working:
