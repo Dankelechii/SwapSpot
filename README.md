@@ -79,13 +79,28 @@ to be wrapped in `escapeHtml()` or `attrJsId()`, or to appear in
 `tools/escaping-allowlist.json`, a reviewed list of things that cannot carry
 member text: numbers, class names, literal-only ternaries.
 
+`tools/check-syntax.js` guards the worse failure. The escaping check protects
+members from each other; a syntax error in `index.html` is a blank page on the
+live site, with no build step and no previous version still standing.
+
 ```
+node tools/check-syntax.js            # the inline script parses
 node tools/check-escaping.js          # exits non-zero on anything unescaped
 node tools/check-escaping.js --list   # every interpolation and its verdict
 node tools/check-escaping.test.js     # that the checker still catches the real bugs
 ```
 
-Both run on every push and pull request- see `.github/workflows/checks.yml`.
+They run in two places. On every push and pull request in CI, see
+`.github/workflows/checks.yml`. And before a push leaves your machine, via a
+hook you turn on once per clone:
+
+```
+git config core.hooksPath tools/hooks
+```
+
+Under a second, and it catches the mistake before it is on the public site
+rather than after. `git push --no-verify` skips it, deliberately: it guards
+against forgetting, not against deciding.
 
 Adding a line to the allowlist is a decision, not a formality: it says that
 expression can never hold text a member typed. Read the diff.
