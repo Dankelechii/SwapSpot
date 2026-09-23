@@ -2262,7 +2262,10 @@ function seededRand(seed){
 function bayPhotoSVG(l){
   const seed = hashId(l.id);
   const rand = seededRand(seed * 977 + 13);
-  const code = l.bay.replace('BAY ', '');
+  // This lands inside an SVG <text>, which innerHTML parses as markup exactly
+  // like the rest of the document: an unescaped bay number can close the
+  // element and open one with an event handler on it.
+  const code = escapeHtml(l.bay.replace('BAY ', ''));
   const tones = ['#2A2E33', '#2C3239', '#282D31'];
   const bg = tones[seed % tones.length];
   const speckles = Array.from({length: 10}, () => {
@@ -2285,7 +2288,7 @@ function bayPhotoSVG(l){
   return `
     <svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg" style="width:100%; display:block; background:${bg};">
       <defs>
-        <radialGradient id="vign-${l.id}" cx="50%" cy="42%" r="75%">
+        <radialGradient id="vign-${escapeHtml(String(l.id))}" cx="50%" cy="42%" r="75%">
           <stop offset="60%" stop-color="#000" stop-opacity="0"/>
           <stop offset="100%" stop-color="#000" stop-opacity="0.32"/>
         </radialGradient>
@@ -2294,7 +2297,7 @@ function bayPhotoSVG(l){
       <rect y="0" width="400" height="10" fill="#000" opacity="0.18"/>
       ${speckles}
       ${markings}
-      <rect width="400" height="260" fill="url(#vign-${l.id})"/>
+      <rect width="400" height="260" fill="url(#vign-${escapeHtml(String(l.id))})"/>
     </svg>`;
 }
 
@@ -2728,7 +2731,7 @@ function onAvatarChosen(e){
     // The edit sheet draws its own copy of the picture. Re-rendering the whole
     // sheet would wipe a half-typed name, so patch just the avatar.
     const ep = document.getElementById('epAvatar');
-    if(ep) ep.innerHTML = `<img src="${user.avatar}"><div class="avatar-cam">${ICONS.camera}</div>`;
+    if(ep) ep.innerHTML = `<img src="${escapeHtml(user.avatar)}"><div class="avatar-cam">${ICONS.camera}</div>`;
   };
   reader.readAsDataURL(file);
 }
@@ -3080,6 +3083,12 @@ function isFavMember(key){ return favMembers().some(f => f.id === key); }
 // Real listings carry an owner uuid; the demo set only has a name.
 function memberKey(l){ return l.ownerId || l.owner; }
 
+// favourites.target_id is a uuid column. A demo listing's id is a number and a
+// demo member's key is an owner NAME, which is also a string- so "is it a
+// string" was never the right test for "can this be sent".
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v){ return typeof v === 'string' && UUID_RE.test(v); }
+
 function starHTML(on){
   return `<svg viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7"><path d="${STAR_PATH}"/></svg>`;
 }
@@ -3098,7 +3107,7 @@ function toggleFavBay(id){
       id: l.id, bay: l.bay, street: l.street, area: l.area || '',
       owner: l.owner, ownerId: l.ownerId || null, lat: l.lat, lng: l.lng,
     });
-    addFavourite('listing', id, l.bay, l.street);
+    addFavourite('listing', id, l.bay, l.street, l.owner);
     showToast(`Saved ${l.bay}- it's under Saved on your account`, 3500);
   }
   saveState();
@@ -3131,19 +3140,19 @@ function toggleFavMember(key){
    updated local state and re-rendered by the time these run, so a missing
    table or a dropped connection costs you the sync, never the interaction. */
 
-async function addFavourite(kind, targetId, label, sublabel){
-  if(!(backendReady && session) || typeof targetId !== 'string') return;
+async function addFavourite(kind, targetId, label, sublabel, ownerLabel){
+  if(!(backendReady && session) || !isUuid(targetId)) return;
   try{
     const { error } = await sb.from('favourites').upsert({
       user_id: session.user.id, kind, target_id: targetId,
-      label: label || '', sublabel: sublabel || null,
+      label: label || '', sublabel: sublabel || null, owner_label: ownerLabel || null,
     });
     if(error) throw error;
   } catch(e){ console.warn('favourites unavailable', e); }
 }
 
 async function removeFavourite(kind, targetId){
-  if(!(backendReady && session) || typeof targetId !== 'string') return;
+  if(!(backendReady && session) || !isUuid(targetId)) return;
   try{
     const { error } = await sb.from('favourites').delete()
       .eq('user_id', session.user.id).eq('kind', kind).eq('target_id', targetId);
@@ -3155,18 +3164,48 @@ async function fetchFavourites(){
   if(!(backendReady && session)) return;
   try{
     const { data, error } = await sb.from('favourites')
-      .select('kind, target_id, label, sublabel')
+      .select('kind, target_id, label, sublabel, owner_label')
       .order('created_at', { ascending: false });
     if(error) throw error;
     const rows = data || [];
-    state.favBays = rows.filter(r => r.kind === 'listing')
-      .map(r => ({ id: r.target_id, bay: r.label, street: r.sublabel || '', owner: '', ownerId: null }));
-    state.favMembers = rows.filter(r => r.kind === 'member')
-      .map(r => ({ id: r.target_id, name: r.label }));
+    state.favBays = mergeFavourites(favBays(), rows.filter(r => r.kind === 'listing'),
+      r => ({ id: r.target_id, bay: r.label, street: r.sublabel || '', owner: r.owner_label || '' }));
+    state.favMembers = mergeFavourites(favMembers(), rows.filter(r => r.kind === 'member'),
+      r => ({ id: r.target_id, name: r.label }));
+    saveState();
   } catch(e){
     // the favourites migration may not be applied yet; local state still works
     console.warn('favourites unavailable', e);
   }
+}
+
+// The server owns which favourites exist. It does not own all of what we know
+// about them: the local snapshot also carries coordinates and area, which no
+// column holds. So membership comes from the server, and the local row supplies
+// every field the server came back empty on- otherwise a saved bay would lose
+// its owner the moment anything refreshed, which is precisely the delisted case
+// the snapshot exists for.
+//
+// A favourite the server could never have been told about (a demo listing has a
+// numeric id) is kept: the server's silence about it is not a deletion.
+function mergeFavourites(local, rows, build){
+  const merged = rows.map(r => {
+    const mine = local.find(f => f.id === r.target_id);
+    const fromServer = build(r);
+    return mine ? Object.assign({}, mine, definedOnly(fromServer)) : fromServer;
+  });
+  local.forEach(f => {
+    if(!isUuid(f.id) && !merged.some(m => m.id === f.id)) merged.push(f);
+  });
+  return merged;
+}
+
+function definedOnly(o){
+  const out = {};
+  Object.keys(o).forEach(k => {
+    if(o[k] !== null && o[k] !== undefined && o[k] !== '') out[k] = o[k];
+  });
+  return out;
 }
 
 // A saved row keeps the label it was saved with, but the live feed knows
@@ -3191,22 +3230,27 @@ function renderSaved(){
     return;
   }
 
-  const isLive = id => listings.some(l => l.id === id);
+  // Same three states the feed shows, so a saved row never offers an action the
+  // card for the same bay refuses: not being lent, Plus-only, or requestable.
+  const actionFor = (id) => {
+    const live = listings.find(l => l.id === id);
+    if(!live) return `<button class="sr-act" disabled title="Nobody is lending this one right now">Not lent</button>`;
+    if(live.priority && !state.isPlus) return `<button class="sr-act" disabled title="This bay is reserved for Swap Plus">Plus only</button>`;
+    return `<button class="sr-act" onclick="openBookingModal(${attrJsId(id)})">Request</button>`;
+  };
 
-  const bayRow = (f, sub) => `
-    <div class="saved-row ${sub ? 'sub' : ''}">
+  const bayRow = (f) => `
+    <div class="saved-row">
       <button class="fav-btn on" onclick="toggleFavBay(${attrJsId(f.id)})" aria-label="Remove ${escapeHtml(f.bay)} from saved" title="Remove from saved">${starHTML(true)}</button>
       <div class="sr-main">
         <span class="sr-bay">${escapeHtml(f.bay)}</span>
         <small>${escapeHtml(f.street || '')}${f.owner ? ' · ' + escapeHtml(f.owner) : ''}</small>
       </div>
-      ${isLive(f.id)
-        ? `<button class="sr-act" onclick="openBookingModal(${attrJsId(f.id)})">Request</button>`
-        : `<button class="sr-act" disabled title="Nobody is lending this one right now">Not lent</button>`}
+      ${actionFor(f.id)}
     </div>`;
 
   const baysHTML = bays.length ? `
-    <div class="saved-list">${bays.map(f => bayRow(f, false)).join('')}</div>` : '';
+    <div class="saved-list">${bays.map(f => bayRow(f)).join('')}</div>` : '';
 
   const membersHTML = members.length ? `
     <div class="section-label" style="padding-top:${bays.length ? '14px' : '0'};">Saved members</div>
@@ -3227,7 +3271,7 @@ function renderSaved(){
             <span class="sr-bay">${escapeHtml(l.bay)}</span>
             <small>${escapeHtml(l.street)} · ${l.mi} mi away</small>
           </div>
-          <button class="sr-act" onclick="openBookingModal(${attrJsId(l.id)})">Request</button>
+          ${actionFor(l.id)}
         </div>`).join('')}`;
       }).join('')}
     </div>` : '';
@@ -3347,7 +3391,7 @@ function openEditProfile(){
   document.getElementById('editProfileBody').innerHTML = `
     <div class="avatar-upload-wrap" style="margin-bottom:14px;">
       <div class="avatar-big" id="epAvatar" onclick="triggerAvatarUpload()">
-        ${user.avatar ? `<img src="${user.avatar}">` : (escapeHtml(initials(user.name)) || 'JD')}
+        ${user.avatar ? `<img src="${escapeHtml(user.avatar)}">` : (escapeHtml(initials(user.name)) || 'JD')}
         <div class="avatar-cam">${ICONS.camera}</div>
       </div>
     </div>
@@ -3417,8 +3461,10 @@ async function saveProfile(){
 }
 
 function renderAccount(){
+  // profiles.avatar_url is in the client update grant, so it is member-set
+  // text, not a value the app can assume it wrote.
   const av = user.avatar
-    ? `<img src="${user.avatar}">`
+    ? `<img src="${escapeHtml(user.avatar)}">`
     : (escapeHtml(initials(user.name)) || 'JD');
   document.getElementById('profileRow').innerHTML = `
     <div class="avatar-big" style="width:46px;height:46px;font-size:15px;cursor:pointer;" onclick="openEditProfile()">

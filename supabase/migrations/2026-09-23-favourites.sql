@@ -4,12 +4,12 @@
 -- the table adds is that they follow you to another device, which is the
 -- whole point of saving something.
 --
--- label and sublabel are deliberately denormalised copies of the bay number
--- and street, or the member's name, taken when you saved it. A bookmark
--- should still read as "BAY 14A, Rivington St" while nobody is lending that
--- bay and it is nowhere in the feed, and joining listings would show nothing
--- in exactly that case. The live feed overwrites them on screen when it knows
--- better.
+-- label, sublabel and owner_label are deliberately denormalised copies of the
+-- bay number, street and lender's name, or the member's name, taken when you
+-- saved it. A bookmark should still read as "BAY 14A, Rivington St, Meera R."
+-- while nobody is lending that bay and it is nowhere in the feed, and joining
+-- listings would show nothing in exactly that case. The live feed overwrites
+-- them on screen when it knows better.
 --
 -- target_id is not a foreign key on purpose. It points at a listing or at a
 -- member depending on `kind`, and a delisted bay should stay in your saved
@@ -23,11 +23,15 @@ create table if not exists favourites (
   user_id    uuid not null references auth.users(id) on delete cascade,
   kind       text not null check (kind in ('listing', 'member')),
   target_id  uuid not null,
-  label      text not null default '',
-  sublabel   text,
+  label       text not null default '',
+  sublabel    text,
+  owner_label text,
   created_at timestamptz not null default now(),
   primary key (user_id, kind, target_id)
 );
+
+-- for anyone who applied an earlier copy of this file, before owner_label
+alter table favourites add column if not exists owner_label text;
 
 create index if not exists favourites_user_idx on favourites (user_id, created_at desc);
 
