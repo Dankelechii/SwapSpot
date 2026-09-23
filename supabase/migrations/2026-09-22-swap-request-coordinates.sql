@@ -14,6 +14,12 @@
 -- paste, Run. Deploying the app without this is fine; navigation just uses
 -- the street fallback until it lands.
 
+-- The added columns change the function's return type, and Postgres refuses
+-- that through "create or replace" ("cannot change return type of existing
+-- function"). Drop it first. Nothing depends on it but the app's own rpc()
+-- call, and the replacement is created in the same transaction.
+drop function if exists my_swap_requests();
+
 create or replace function my_swap_requests()
 returns table (
   id uuid,
