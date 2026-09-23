@@ -1301,8 +1301,8 @@ function renderSwaps(){
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
             <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
               <button class="nav-link" onclick="navigateToSwap(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.car}Navigate to this bay</button>
-              ${(s.creditsSettled && !declined) ? (s.rated
-                ? `<span class="rating"><span class="rating-count">You rated this swap</span>${starsHTML(s.rated)}</span>`
+              ${(s.creditsSettled && !declined) ? (ratedStars(s)
+                ? `<span class="rating"><span class="rating-count">You rated this swap</span>${starsHTML(ratedStars(s))}</span>`
                 : `<button class="nav-link" onclick="openRate(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.shield}Rate this swap</button>`) : ''}
             </div>
             ${footer}
@@ -1703,6 +1703,12 @@ function renderOwnerInbox(){
                 <span class="sim-link" onclick="approveRequest('${r.id}')">Approve</span> ·
                 <span class="sim-link" onclick="declineRequest('${r.id}')">Decline</span>
               </div>` : ''}
+            ${r.status === 'confirmed' ? `
+              <div style="margin-top:10px;">
+                ${myRatingsGiven[r.id]
+                  ? `<span class="rating"><span class="rating-count">You rated ${escapeHtml(r.requester_name)}</span>${starsHTML(myRatingsGiven[r.id])}</span>`
+                  : `<button class="nav-link" onclick="openRate('${r.id}', 'owner')">${ICONS.shield}Rate ${escapeHtml(r.requester_name)}</button>`}
+              </div>` : ''}
           </div>
         </div>`).join('')}
     </div>`;
@@ -1807,9 +1813,10 @@ async function fetchWallet(){
 async function fetchProfile(){
   if(!(backendReady && session)) return;
   try{
-    const { data } = await sb.from('profiles').select('display_name, verification_status').eq('id', session.user.id).maybeSingle();
+    const { data } = await sb.from('profiles').select('display_name, avatar_url, verification_status').eq('id', session.user.id).maybeSingle();
     if(data){
       user.name = data.display_name || user.name;
+      if(data.avatar_url) user.avatar = data.avatar_url;
       user.verification = data.verification_status; // 'unverified' | 'pending' | 'verified'
     }
   } catch(e){ console.warn('fetchProfile failed', e); }
@@ -2024,7 +2031,7 @@ async function disableNotifications(){
 
 async function refreshBackendData(){
   if(!(backendReady && session)) return;
-  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox(), fetchMyRating()]);
+  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox(), fetchMyRating(), fetchMyRatingsGiven()]);
   refreshAll();
   startRealtime();
 }
@@ -2636,6 +2643,10 @@ function onAvatarChosen(e){
     user.avatar = ev.target.result;
     if(obStep === 2) renderOnboarding();
     if(document.getElementById('appShell').style.display !== 'none') renderAccount();
+    // The edit sheet draws its own copy of the picture. Re-rendering the whole
+    // sheet would wipe a half-typed name, so patch just the avatar.
+    const ep = document.getElementById('epAvatar');
+    if(ep) ep.innerHTML = `<img src="${user.avatar}"><div class="avatar-cam">${ICONS.camera}</div>`;
   };
   reader.readAsDataURL(file);
 }
@@ -2789,23 +2800,68 @@ async function fetchMyRating(){
   }
 }
 
+/* ---------------- ratings this member has given ----------------
+   Keyed by swap request, not stored as a flag on each swap. fetchMySwaps()
+   rebuilds state.mySwaps from the server on every refresh, so a flag written
+   onto one of those objects is lost the next time anything refreshes- the
+   "Rate this swap" button would come back on a swap already rated, and the
+   second insert would fail the (swap_request_id, rater_id) primary key.
+   RLS on swap_ratings only returns rows where rater_id = auth.uid(), so this
+   is already scoped to us without a filter. */
+
+let myRatingsGiven = {};
+
+async function fetchMyRatingsGiven(){
+  if(!(backendReady && session)){ myRatingsGiven = {}; return; }
+  try{
+    const { data, error } = await sb.from('swap_ratings').select('swap_request_id, stars');
+    if(error) throw error;
+    const next = {};
+    (data || []).forEach(r => { next[r.swap_request_id] = r.stars; });
+    myRatingsGiven = next;
+  } catch(e){
+    // the ratings migration may not be applied yet; nothing shows as rated
+    console.warn('swap_ratings unavailable', e);
+  }
+}
+
+// Local demo swaps carry their score on the object; real ones come from the
+// lookup above.
+function ratedStars(s){
+  return s.rated || myRatingsGiven[s.id] || 0;
+}
+
 /* ---------------- rate a finished swap ---------------- */
 
 const RATE_WORDS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Excellent'];
-let rateDraft = { key: null, stars: 0 };
+let rateDraft = { key: null, side: 'borrower', stars: 0 };
 
-function openRate(key){
+// A swap has two sides and the schema lets either rate the other, so resolve
+// whichever list the key came from to one shape: who is being rated, and the
+// swap request that entitles you to rate them.
+function rateTarget(key, side){
+  if(side === 'owner'){
+    const r = ownerInboxRequests.find(x => x.id === key);
+    return r ? { id: r.id, name: r.requester_name, rateeId: r.requester_id,
+                 bay: r.bay_number, street: r.street, remote: true, swap: null } : null;
+  }
   const s = state.mySwaps.find(x => x.key === key || x.id === key);
-  if(!s) return;
-  rateDraft = { key, stars: 0 };
-  document.getElementById('rateTitle').textContent = `Rate ${s.owner || 'this swap'}`;
+  return s ? { id: s.id, name: s.owner, rateeId: s.ownerId,
+               bay: s.bay, street: s.street, remote: s.remote, swap: s } : null;
+}
+
+function openRate(key, side){
+  const t = rateTarget(key, side);
+  if(!t) return;
+  rateDraft = { key, side: side || 'borrower', stars: 0 };
+  document.getElementById('rateTitle').textContent = `Rate ${t.name || 'this swap'}`;
   document.getElementById('rateBody').innerHTML = `
-    <div class="ob-sub">${escapeHtml(s.bay)}, ${escapeHtml(s.street)}. How did it go?</div>
+    <div class="ob-sub">${escapeHtml(t.bay)}, ${escapeHtml(t.street)}. How did it go?</div>
     <div class="rate-row" id="rateRow">
       ${[1,2,3,4,5].map(n => `<button class="rate-star" data-n="${n}" onclick="setRate(${n})" aria-label="${n} star${n>1?'s':''}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${STAR_PATH}"/></svg></button>`).join('')}
     </div>
     <div class="rate-caption" id="rateCaption"></div>
-    <div class="demo-note" style="margin:12px 0;">They rate you too. Ratings are only ever shown as an average, never as individual scores.</div>
+    <div class="demo-note" style="margin:12px 0;">${side === 'owner' ? 'They can rate you back' : 'The owner can rate you back'}. Ratings are only ever shown as an average, never as individual scores.</div>
     <button class="btn btn-plus btn-block" id="rateSubmit" onclick="submitRate()" disabled>Submit rating</button>
   `;
   document.getElementById('rateModal').classList.add('show');
@@ -2825,15 +2881,15 @@ function closeRate(){
 }
 
 async function submitRate(){
-  const s = state.mySwaps.find(x => x.key === rateDraft.key || x.id === rateDraft.key);
-  if(!s || !rateDraft.stars) return;
+  const t = rateTarget(rateDraft.key, rateDraft.side);
+  if(!t || !rateDraft.stars) return;
 
-  if(backendReady && session && s.remote){
+  if(backendReady && session && t.remote){
     try{
       const { error } = await sb.from('swap_ratings').insert({
-        swap_request_id: s.id,
+        swap_request_id: t.id,
         rater_id: session.user.id,
-        ratee_id: s.ownerId,
+        ratee_id: t.rateeId,
         stars: rateDraft.stars
       });
       if(error) throw error;
@@ -2841,12 +2897,13 @@ async function submitRate(){
       showToast(`Could not save that rating: ${e.message || e}`, 5000);
       return;
     }
+    myRatingsGiven[t.id] = rateDraft.stars;
   }
-  s.rated = rateDraft.stars;
+  if(t.swap) t.swap.rated = rateDraft.stars;
   saveState();
   closeRate();
   renderSwaps();
-  showToast(`Thanks. You rated ${s.owner || 'this swap'} ${rateDraft.stars} of 5.`, 4000);
+  showToast(`Thanks. You rated ${t.name || 'this swap'} ${rateDraft.stars} of 5.`, 4000);
 }
 
 /* ---------------- edit profile ---------------- */
@@ -2854,7 +2911,7 @@ async function submitRate(){
 function openEditProfile(){
   document.getElementById('editProfileBody').innerHTML = `
     <div class="avatar-upload-wrap" style="margin-bottom:14px;">
-      <div class="avatar-big" onclick="triggerAvatarUpload()">
+      <div class="avatar-big" id="epAvatar" onclick="triggerAvatarUpload()">
         ${user.avatar ? `<img src="${user.avatar}">` : (escapeHtml(initials(user.name)) || 'JD')}
         <div class="avatar-cam">${ICONS.camera}</div>
       </div>
@@ -2864,7 +2921,7 @@ function openEditProfile(){
       <input type="text" id="epName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onEditProfileField()">
     </div>
     <div class="ob-sub" id="epError" style="color:var(--meter);"></div>
-    <div class="demo-note" style="margin-bottom:12px;">This is the name and photo other members see next to a bay you lend.</div>
+    <div class="demo-note" style="margin-bottom:12px;">Your name is what members see next to a bay you lend. Both are saved to your account, so they follow you to any device you sign in on.</div>
     <button class="btn btn-plus btn-block" id="epSave" onclick="saveProfile()">Save changes</button>
   `;
   document.getElementById('editProfileModal').classList.add('show');
@@ -2889,13 +2946,32 @@ async function saveProfile(){
   user.name = name;
   saveState();
 
+  const btn = document.getElementById('epSave');
   if(backendReady && session){
     try{
+      // A data: URL means the picture was only ever chosen in this browser.
+      // Upload it, or it would never leave the device and the sheet would be
+      // promising something it does not do. bay-photos is the app's public
+      // bucket and its insert policy already scopes writes to your own folder.
+      let avatarUrl = null;
+      if(user.avatar && user.avatar.startsWith('data:')){
+        if(btn){ btn.disabled = true; btn.textContent = 'Saving photo...'; }
+        const blob = await (await fetch(user.avatar)).blob();
+        const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const path = `${session.user.id}/avatar-${Date.now()}.${ext}`;
+        const { error: upErr } = await sb.storage.from('bay-photos')
+          .upload(path, blob, { contentType: blob.type, upsert: true });
+        if(upErr) throw upErr;
+        avatarUrl = sb.storage.from('bay-photos').getPublicUrl(path).data.publicUrl;
+        user.avatar = avatarUrl;
+      }
       // the update grant covers display_name and avatar_url only, so nothing
       // else on the row can be touched from the client
-      const { error } = await sb.from('profiles').update({ display_name: name }).eq('id', session.user.id);
+      const patch = avatarUrl ? { display_name: name, avatar_url: avatarUrl } : { display_name: name };
+      const { error } = await sb.from('profiles').update(patch).eq('id', session.user.id);
       if(error) throw error;
     } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Save changes'; }
       if(err) err.textContent = `Could not save: ${e.message || e}`;
       return;
     }
