@@ -149,6 +149,12 @@ baseline.
 - `migrations/2026-09-22-push-subscriptions.sql`- stores one Web Push
   subscription per browser, scoped to its owner by RLS. Needed only if you
   turn on Web Push (see below).
+- `migrations/2026-09-23-member-ratings.sql`- adds `swap_ratings` and the
+  `member_rating()` aggregate, so members can rate each other after a
+  confirmed swap. Individual scores stay private to whoever gave them; only
+  the average is readable. Without it the profile shows "New member" and
+  submitting a rating fails, so apply it before telling anyone the feature
+  exists.
 - `migrations/2026-09-22-swap-requests-realtime.sql`- publishes
   `swap_requests` over Realtime and sets `replica identity full`, so both
   sides of a swap are told the moment it changes. No new policy: Realtime

@@ -262,6 +262,29 @@
   .avatar{ width:46px; height:46px; border-radius:50%; background:var(--curb); display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; color:var(--asphalt); font-size:16px; flex:0 0 auto; }
   .profile-name{ font-weight:600; font-size:14.5px; }
   .profile-sub{ font-size:11.5px; color:var(--paint-dim); }
+  .profile-edit{
+    background:none; border:none; padding:0; cursor:pointer; margin-top:4px;
+    font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:var(--curb);
+  }
+
+  /* ---- member rating ---- */
+  .rating{ display:flex; align-items:center; gap:6px; margin-top:4px; }
+  .stars{ display:inline-flex; gap:1px; }
+  .stars svg{ width:13px; height:13px; }
+  .star-on{ color:var(--curb); }
+  .star-off{ color:rgba(246,244,236,0.22); }
+  .rating-score{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600; color:var(--paint); }
+  .rating-count{ font-size:11px; color:var(--paint-dim); }
+  .rating-new{ font-size:11.5px; color:var(--paint-dim); }
+
+  /* the picker used to rate a finished swap */
+  .rate-row{ display:flex; gap:6px; justify-content:center; margin:14px 0 4px; }
+  .rate-star{
+    background:none; border:none; padding:2px; cursor:pointer; color:rgba(246,244,236,0.22);
+  }
+  .rate-star svg{ width:36px; height:36px; }
+  .rate-star.lit{ color:var(--curb); }
+  .rate-caption{ text-align:center; font-size:12px; color:var(--paint-dim); min-height:18px; }
 
   /* ---- bottom nav ---- */
   .bottomnav{
@@ -914,6 +937,28 @@
       </div>
     </div>
 
+    <!-- EDIT PROFILE MODAL -->
+    <div class="modal-overlay" id="editProfileModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3>Edit profile</h3>
+          <button class="modal-close" onclick="closeEditProfile()">✕</button>
+        </div>
+        <div id="editProfileBody"></div>
+      </div>
+    </div>
+
+    <!-- RATE A SWAP MODAL -->
+    <div class="modal-overlay" id="rateModal">
+      <div class="modal-sheet">
+        <div class="modal-head">
+          <h3 id="rateTitle">Rate this swap</h3>
+          <button class="modal-close" onclick="closeRate()">✕</button>
+        </div>
+        <div id="rateBody"></div>
+      </div>
+    </div>
+
     <!-- NAVIGATE MODAL -->
     <div class="modal-overlay" id="navModal">
       <div class="modal-sheet">
@@ -1254,8 +1299,11 @@ function renderSwaps(){
             <div class="ticket-time">${s.time ? s.time + ' · ' : ''}${s.duration}</div>
             <div class="ticket-swapper">Swap with <b>${escapeHtml(s.owner)}</b></div>
             <div class="cost-line ${(s.near||s.hot)?'premium':''}">${ICONS.coin}<b>${s.cost} credits</b> to book</div>
-            <div style="margin-top:10px;">
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
               <button class="nav-link" onclick="navigateToSwap(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.car}Navigate to this bay</button>
+              ${(s.creditsSettled && !declined) ? (s.rated
+                ? `<span class="rating"><span class="rating-count">You rated this swap</span>${starsHTML(s.rated)}</span>`
+                : `<button class="nav-link" onclick="openRate(${s.key !== undefined ? s.key : jsId(s.id)})">${ICONS.shield}Rate this swap</button>`) : ''}
             </div>
             ${footer}
           </div>
@@ -1725,6 +1773,7 @@ async function fetchMySwaps(){
       time: '',
       duration: `${row.duration_hours} hour${row.duration_hours>1?'s':''}`,
       owner: row.owner_name,
+      ownerId: row.owner_id,
       cost: row.cost_credits,
       hot: row.is_hot,
       near: row.is_near,
@@ -1975,7 +2024,7 @@ async function disableNotifications(){
 
 async function refreshBackendData(){
   if(!(backendReady && session)) return;
-  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox()]);
+  await Promise.all([fetchProfile(), fetchWallet(), fetchListings(), fetchMySwaps(), fetchOwnerInbox(), fetchMyRating()]);
   refreshAll();
   startRealtime();
 }
@@ -2695,18 +2744,181 @@ function closeTermsModal(){
   document.getElementById('tcModal').classList.remove('show');
 }
 
+/* ---------------- member rating ----------------
+   Averages only. Individual scores stay private to whoever gave them, which
+   is what member_rating() in the schema enforces. A member with no ratings
+   reads as new rather than as zero stars: nobody should look badly rated for
+   having done nothing yet. */
+
+const STAR_PATH = 'M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.45 6.2 20.5l1.1-6.45-4.7-4.6 6.5-.95L12 2.6z';
+
+function starsHTML(avg, size){
+  const full = Math.round(avg);
+  let out = '<span class="stars">';
+  for(let i = 1; i <= 5; i++){
+    out += `<svg viewBox="0 0 24 24" class="${i <= full ? 'star-on' : 'star-off'}" fill="currentColor"><path d="${STAR_PATH}"/></svg>`;
+  }
+  return out + '</span>';
+}
+
+// rating is { average, count } or null
+function ratingHTML(rating){
+  if(!rating || !rating.count){
+    return `<div class="rating"><span class="rating-new">New member, no ratings yet</span></div>`;
+  }
+  const avg = Number(rating.average);
+  return `<div class="rating">
+    ${starsHTML(avg)}
+    <span class="rating-score">${avg.toFixed(2)}</span>
+    <span class="rating-count">(${rating.count})</span>
+  </div>`;
+}
+
+async function fetchMyRating(){
+  if(!(backendReady && session)) return;
+  try{
+    const { data, error } = await sb.rpc('member_rating', { p_user_id: session.user.id });
+    if(error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    user.rating = row && row.ratings_count
+      ? { average: row.average, count: row.ratings_count }
+      : { average: 0, count: 0 };
+  } catch(e){
+    // the migration may not be applied yet; the profile just shows "New member"
+    console.warn('member_rating unavailable', e);
+  }
+}
+
+/* ---------------- rate a finished swap ---------------- */
+
+const RATE_WORDS = ['', 'Poor', 'Not great', 'Fine', 'Good', 'Excellent'];
+let rateDraft = { key: null, stars: 0 };
+
+function openRate(key){
+  const s = state.mySwaps.find(x => x.key === key || x.id === key);
+  if(!s) return;
+  rateDraft = { key, stars: 0 };
+  document.getElementById('rateTitle').textContent = `Rate ${s.owner || 'this swap'}`;
+  document.getElementById('rateBody').innerHTML = `
+    <div class="ob-sub">${escapeHtml(s.bay)}, ${escapeHtml(s.street)}. How did it go?</div>
+    <div class="rate-row" id="rateRow">
+      ${[1,2,3,4,5].map(n => `<button class="rate-star" data-n="${n}" onclick="setRate(${n})" aria-label="${n} star${n>1?'s':''}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${STAR_PATH}"/></svg></button>`).join('')}
+    </div>
+    <div class="rate-caption" id="rateCaption"></div>
+    <div class="demo-note" style="margin:12px 0;">They rate you too. Ratings are only ever shown as an average, never as individual scores.</div>
+    <button class="btn btn-plus btn-block" id="rateSubmit" onclick="submitRate()" disabled>Submit rating</button>
+  `;
+  document.getElementById('rateModal').classList.add('show');
+}
+
+function setRate(n){
+  rateDraft.stars = n;
+  document.querySelectorAll('#rateRow .rate-star').forEach(b => {
+    b.classList.toggle('lit', Number(b.dataset.n) <= n);
+  });
+  document.getElementById('rateCaption').textContent = RATE_WORDS[n];
+  document.getElementById('rateSubmit').disabled = false;
+}
+
+function closeRate(){
+  document.getElementById('rateModal').classList.remove('show');
+}
+
+async function submitRate(){
+  const s = state.mySwaps.find(x => x.key === rateDraft.key || x.id === rateDraft.key);
+  if(!s || !rateDraft.stars) return;
+
+  if(backendReady && session && s.remote){
+    try{
+      const { error } = await sb.from('swap_ratings').insert({
+        swap_request_id: s.id,
+        rater_id: session.user.id,
+        ratee_id: s.ownerId,
+        stars: rateDraft.stars
+      });
+      if(error) throw error;
+    } catch(e){
+      showToast(`Could not save that rating: ${e.message || e}`, 5000);
+      return;
+    }
+  }
+  s.rated = rateDraft.stars;
+  saveState();
+  closeRate();
+  renderSwaps();
+  showToast(`Thanks. You rated ${s.owner || 'this swap'} ${rateDraft.stars} of 5.`, 4000);
+}
+
+/* ---------------- edit profile ---------------- */
+
+function openEditProfile(){
+  document.getElementById('editProfileBody').innerHTML = `
+    <div class="avatar-upload-wrap" style="margin-bottom:14px;">
+      <div class="avatar-big" onclick="triggerAvatarUpload()">
+        ${user.avatar ? `<img src="${user.avatar}">` : (escapeHtml(initials(user.name)) || 'JD')}
+        <div class="avatar-cam">${ICONS.camera}</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Display name</label>
+      <input type="text" id="epName" placeholder="Jordan Diallo" value="${escapeHtml(user.name)}" oninput="onEditProfileField()">
+    </div>
+    <div class="ob-sub" id="epError" style="color:var(--meter);"></div>
+    <div class="demo-note" style="margin-bottom:12px;">This is the name and photo other members see next to a bay you lend.</div>
+    <button class="btn btn-plus btn-block" id="epSave" onclick="saveProfile()">Save changes</button>
+  `;
+  document.getElementById('editProfileModal').classList.add('show');
+  onEditProfileField();
+}
+
+function closeEditProfile(){
+  document.getElementById('editProfileModal').classList.remove('show');
+}
+
+function onEditProfileField(){
+  const btn = document.getElementById('epSave');
+  const name = document.getElementById('epName')?.value.trim() || '';
+  if(btn) btn.disabled = name.length < 2;
+}
+
+async function saveProfile(){
+  const name = document.getElementById('epName').value.trim();
+  const err = document.getElementById('epError');
+  if(name.length < 2){ if(err) err.textContent = 'Give a name of at least two characters'; return; }
+
+  user.name = name;
+  saveState();
+
+  if(backendReady && session){
+    try{
+      // the update grant covers display_name and avatar_url only, so nothing
+      // else on the row can be touched from the client
+      const { error } = await sb.from('profiles').update({ display_name: name }).eq('id', session.user.id);
+      if(error) throw error;
+    } catch(e){
+      if(err) err.textContent = `Could not save: ${e.message || e}`;
+      return;
+    }
+  }
+  closeEditProfile();
+  renderAccount();
+  showToast('Profile updated', 3000);
+}
+
 function renderAccount(){
   const av = user.avatar
     ? `<img src="${user.avatar}">`
     : (escapeHtml(initials(user.name)) || 'JD');
   document.getElementById('profileRow').innerHTML = `
-    <div class="avatar-big" style="width:46px;height:46px;font-size:15px;cursor:pointer;" onclick="triggerAvatarUpload()">
+    <div class="avatar-big" style="width:46px;height:46px;font-size:15px;cursor:pointer;" onclick="openEditProfile()">
       ${av}
       <div class="avatar-cam" style="width:18px;height:18px;border-width:2px;">${ICONS.camera}</div>
     </div>
     <div>
       <div class="profile-name">${escapeHtml(user.name || 'Jordan Diallo')}</div>
       <div class="profile-sub">${state.isPlus ? 'Swap Plus member' : 'Basic member'}</div>
+      ${ratingHTML(user.rating)}
+      <button class="profile-edit" onclick="openEditProfile()">Edit profile</button>
     </div>`;
   document.getElementById('accountVerifyBlock').innerHTML = renderVerifyBlock();
 
