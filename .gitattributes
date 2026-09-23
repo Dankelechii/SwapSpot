@@ -1,0 +1,5 @@
+# Git hooks are run by sh. With CRLF they fail on Linux and macOS with
+# "bad interpreter: /bin/sh^M", which on a Windows machine you would never
+# see, so pin them to LF regardless of the local autocrlf setting.
+tools/hooks/* text eol=lf
+*.sh          text eol=lf

@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Runs the repo's checks before anything leaves this machine.
+#
+# main is the deploy branch: GitHub Pages serves it directly, so whatever is
+# pushed is on the public site about a minute later, with no earlier version
+# still standing. These checks take under a second between them and catch the
+# two things that have actually gone wrong: an unescaped value reaching
+# innerHTML, and index.html failing to parse.
+#
+# Enable it in a fresh clone with:
+#
+#     git config core.hooksPath tools/hooks
+#
+# To push past it once, knowingly:
+#
+#     git push --no-verify
+#
+# That escape hatch is deliberate. This guards against oversight, not against
+# someone who has decided to push anyway.
+
+set -e
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push: node is not on PATH, so the checks cannot run." >&2
+  echo "          Install node, or push with --no-verify if you are sure." >&2
+  exit 1
+fi
+
+root=$(git rev-parse --show-toplevel)
+
+node "$root/tools/check-syntax.js"
+node "$root/tools/check-escaping.js"
+
+exit 0

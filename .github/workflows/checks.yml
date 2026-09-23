@@ -15,6 +15,9 @@ jobs:
         with:
           node-version: '20'
 
+      # that index.html parses at all- main is the deploy branch
+      - run: node tools/check-syntax.js
+
       # that the checker still catches the holes it was written for
       - run: node tools/check-escaping.test.js
 
