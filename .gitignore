@@ -9,3 +9,7 @@ brag-output/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# Supabase CLI machine-local state- link target and version cache,
+# regenerated on every run and specific to one computer.
+supabase/.temp/

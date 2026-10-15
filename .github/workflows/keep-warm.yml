@@ -5,8 +5,12 @@ name: keep supabase warm
 # and quietly refuses sign-ins. That is the worst possible state to send a
 # visitor into, so this makes one request a day to keep the project awake.
 #
-# No key is needed. The REST root answers 401 without an apikey, and a 401 is
-# still a request as far as the inactivity timer is concerned.
+# It sends the publishable key, which is already public in index.html, and
+# asks for a row. That matters: without a key the request is rejected by the
+# API gateway and may never reach Postgres, so it would be a ping that proves
+# nothing while reading as a daily success. With the key, PostgREST connects
+# as `anon` and actually runs a query. RLS returns no rows, which is fine-
+# the point is that the database did some work.
 #
 # The job FAILS if the host does not answer at all, which is what a paused or
 # deleted project looks like. That failure email is the early warning we did
@@ -27,13 +31,21 @@ jobs:
     name: ping the project
     runs-on: ubuntu-latest
     steps:
-      - name: Request the REST root
+      - name: Run a real query against the database
+        env:
+          # the publishable key, already shipped in index.html- not a secret
+          SUPABASE_ANON_KEY: sb_publishable_UhT3PuPNRVtF51FPv0XUDA_5m-wf4tX
         run: |
-          url="https://woxumfxyghqpesooobjq.supabase.co/rest/v1/"
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
-          echo "HTTP $code from $url"
+          url="https://woxumfxyghqpesooobjq.supabase.co/rest/v1/listings?select=id&limit=1"
+          auth="apikey: $SUPABASE_ANON_KEY"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H "$auth" "$url" || echo 000)
+          echo "HTTP $code"
           if [ "$code" = "000" ]; then
-            echo "::error::No response. The project is probably paused or deleted- check the Supabase dashboard."
+            echo "::error::No response at all. The project is probably paused or deleted- check the Supabase dashboard."
             exit 1
           fi
-          echo "Project is awake."
+          if [ "$code" -ge 500 ]; then
+            echo "::error::Server error $code. The project may be waking, restoring or broken."
+            exit 1
+          fi
+          echo "Database answered ($code). Project is awake."

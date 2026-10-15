@@ -1342,6 +1342,31 @@ function setOffline(off){
   if(backendOffline === off) return;
   backendOffline = off;
   renderOfflineBanner();
+  // Someone sitting on the page while the project wakes up should not have to
+  // guess when to reload.
+  if(offlineRetry){ clearTimeout(offlineRetry); offlineRetry = null; }
+  if(backendOffline) offlineRetry = setTimeout(probeBackend, 60000);
+}
+
+/* Whether the backend answers at all, asked in a way that works signed out.
+   This is the whole point: the person who most needs telling is the visitor
+   who arrives during an outage and cannot sign in, and they have no session,
+   so nothing behind the session guard will ever run for them.
+
+   browse_listings is revoked from anon, so signed out this comes back as
+   42501 permission denied. That is a success for our purposes- PostgREST
+   only fills in error.code once Postgres has answered, so a code means the
+   server is up and a missing code means the request never got there. */
+let offlineRetry = null;
+
+async function probeBackend(){
+  if(!backendReady){ setOffline(true); return; }
+  try{
+    const { error } = await sb.rpc('browse_listings');
+    setOffline(!!(error && !error.code));
+  } catch(e){
+    setOffline(true);
+  }
 }
 
 function renderOfflineBanner(){
@@ -1440,10 +1465,20 @@ function setRadius(r){
    Dismissible, and the dismissal is remembered. Nagging someone who has
    already read it is how a message stops being read. */
 
+/* The notice says "for the first month". Set this to the date that stops
+   being true and it stops showing itself, rather than claiming a launch
+   month forever to members who join in year two. */
+const SEED_CAMPAIGN_ENDS = '2026-11-15';
+
+function seedCampaignOver(){
+  const ends = Date.parse(SEED_CAMPAIGN_ENDS + 'T23:59:59Z');
+  return isFinite(ends) && Date.now() > ends;
+}
+
 function renderSeedNotice(){
   const el = document.getElementById('seedNotice');
   if(!el) return;
-  if(state.seedNoticeDismissed){ el.innerHTML = ''; return; }
+  if(state.seedNoticeDismissed || seedCampaignOver()){ el.innerHTML = ''; return; }
   el.innerHTML = `
     <div class="seed-notice">
       <div class="seed-head">${ICONS.car}Help build the map</div>
@@ -3891,6 +3926,10 @@ function startApp(mode){
 // Works out where the member should end up, but never skips ahead: the
 // landing page is always the first thing anyone sees.
 async function initApp(){
+  // Deliberately not awaited: the landing page should not wait on a server
+  // that may be unreachable, which is exactly the case this detects.
+  probeBackend();
+
   if(backendReady){
     try{
       const { data } = await sb.auth.getSession();
