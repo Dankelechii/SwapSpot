@@ -1466,10 +1466,12 @@ function setRadius(r){
    Dismissible, and the dismissal is remembered. Nagging someone who has
    already read it is how a message stops being read. */
 
-/* The notice says "for the first month". Set this to the date that stops
-   being true and it stops showing itself, rather than claiming a launch
-   month forever to members who join in year two. */
-const SEED_CAMPAIGN_ENDS = '2026-11-15';
+/* The date the seeding campaign stops. After it, the notice hides itself
+   rather than telling someone who joins in year two that this is the launch
+   month. Note the notice's own wording says "for the first month", so if the
+   app goes live well before this date that line will read oddly to a member
+   who joined in month three. */
+const SEED_CAMPAIGN_ENDS = '2027-02-28';
 
 function seedCampaignOver(){
   const ends = Date.parse(SEED_CAMPAIGN_ENDS + 'T23:59:59Z');
