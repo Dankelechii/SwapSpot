@@ -1,0 +1,39 @@
+name: keep supabase warm
+
+# A free Supabase project pauses after about a week with no requests, and the
+# app does not fail loudly when that happens- it falls back to demo listings
+# and quietly refuses sign-ins. That is the worst possible state to send a
+# visitor into, so this makes one request a day to keep the project awake.
+#
+# No key is needed. The REST root answers 401 without an apikey, and a 401 is
+# still a request as far as the inactivity timer is concerned.
+#
+# The job FAILS if the host does not answer at all, which is what a paused or
+# deleted project looks like. That failure email is the early warning we did
+# not have the last time this happened.
+#
+# Note: GitHub disables scheduled workflows on a public repo after 60 days
+# with no commits. If the project goes quiet for that long, re-enable this in
+# the Actions tab.
+
+on:
+  schedule:
+    # 06:17 UTC, an odd minute because everything on the hour is congested
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: ping the project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request the REST root
+        run: |
+          url="https://woxumfxyghqpesooobjq.supabase.co/rest/v1/"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
+          echo "HTTP $code from $url"
+          if [ "$code" = "000" ]; then
+            echo "::error::No response. The project is probably paused or deleted- check the Supabase dashboard."
+            exit 1
+          fi
+          echo "Project is awake."

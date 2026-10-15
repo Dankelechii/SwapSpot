@@ -686,6 +686,72 @@
   .splash-tester{ margin-top:14px; }
 
   /* ---- community / give-to-get ---- */
+  /* The backend being unreachable used to look like nothing at all: the feed
+     quietly fell back to demo bays and sign-in quietly refused. Say it. */
+  .offline-banner{
+    margin:0; padding:10px 20px;
+    background:var(--meter); color:#fff;
+    font-size:12px; line-height:1.5; font-weight:600;
+    display:flex; align-items:center; gap:9px;
+  }
+  .offline-banner svg{ width:16px; height:16px; flex:0 0 auto; }
+  .offline-banner b{ font-weight:700; }
+  .offline-banner span{ font-weight:500; opacity:0.92; }
+
+  /* The first-month push to get bays into the app. Animated because it is
+     asking for something, not just stating a fact. */
+  @keyframes seedIn{
+    from{ opacity:0; transform:translateY(-10px); }
+    to{   opacity:1; transform:none; }
+  }
+  @keyframes seedSweep{
+    0%{   transform:translateX(-120%); }
+    55%{  transform:translateX(220%); }
+    100%{ transform:translateX(220%); }
+  }
+  @keyframes seedPulse{
+    0%,100%{ transform:scale(1); }
+    50%{     transform:scale(1.11); }
+  }
+  .seed-notice{
+    position:relative; overflow:hidden;
+    margin:0 20px 14px; padding:14px 15px;
+    border-radius:var(--radius-card);
+    background:linear-gradient(135deg, rgba(240,172,61,0.16), rgba(108,92,255,0.14));
+    border:1px solid rgba(240,172,61,0.34);
+    animation:seedIn 560ms cubic-bezier(.2,.7,.3,1) both;
+  }
+  .seed-notice::after{
+    content:""; position:absolute; top:0; bottom:0; left:0; width:38%;
+    background:linear-gradient(100deg, transparent, rgba(246,244,236,0.13), transparent);
+    animation:seedSweep 4.6s ease-in-out 900ms infinite;
+    pointer-events:none;
+  }
+  .seed-head{
+    display:flex; align-items:center; gap:9px; margin-bottom:7px;
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:14.5px;
+    letter-spacing:0.02em; color:var(--paint);
+  }
+  .seed-head svg{
+    width:19px; height:19px; color:var(--curb); flex:0 0 auto;
+    animation:seedPulse 2.4s ease-in-out infinite;
+  }
+  .seed-body{ font-size:12px; color:var(--paint-dim); line-height:1.62; }
+  .seed-body b{ color:var(--paint); font-weight:600; }
+  .seed-actions{ display:flex; gap:10px; align-items:center; margin-top:11px; }
+  .seed-dismiss{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase; color:var(--paint-dim);
+  }
+  .seed-dismiss:hover{ color:var(--paint); }
+
+  @media (prefers-reduced-motion: reduce){
+    .seed-notice{ animation:none; }
+    .seed-notice::after{ animation:none; opacity:0; }
+    .seed-head svg{ animation:none; }
+  }
+
   .community-card{
     margin:0 20px 14px; padding:15px 16px;
     background:var(--asphalt-3); border-radius:var(--radius-card);
@@ -875,6 +941,8 @@
       </svg>
     </div>
 
+    <div class="offline-banner" id="offlineBanner" style="display:none;"></div>
+
     <!-- ONBOARDING -->
     <div id="onboarding" style="display:none;">
       <div class="ob-progress" id="obProgress"></div>
@@ -894,6 +962,7 @@
 
       <!-- HOME -->
       <div class="screen active" id="screen-home">
+        <div id="seedNotice"></div>
         <button class="location-select" id="locationBar" onclick="openLocation()" aria-label="Change the area you are looking in">
           <span>Near <b id="locationLabel">Shoreditch, London</b></span>
           <span>▾</span>
@@ -1187,8 +1256,12 @@ function formatTimeRange(startISO, endISO){
 // on swap_requests correctly hides individual requests from other members,
 // so the per-listing offer count has to come from a server-side aggregate,
 // not a client-side count() a browsing user isn't allowed to run).
+// Whether the last attempt to reach the backend failed. Not the same as
+// backendReady, which only says the client was constructed.
+let backendOffline = false;
+
 async function fetchListings(){
-  if(!backendReady) return false;
+  if(!backendReady){ setOffline(true); return false; }
   try{
     const { data, error } = await sb.rpc('browse_listings');
     if(error) throw error;
@@ -1212,11 +1285,32 @@ async function fetchListings(){
         area: row.area,
       };
     });
+    setOffline(false);
     return true;
   } catch(e){
     console.warn('fetchListings failed- keeping local demo listings', e);
+    setOffline(true);
     return false;
   }
+}
+
+/* The app has always fallen back to demo listings when the backend is
+   unreachable, which keeps it usable offline but makes an outage invisible:
+   six bays appear, sign-in silently refuses, and nothing says why. Someone
+   arriving during a Supabase pause would think the app simply did not work
+   and never come back. Say it out loud instead. */
+function setOffline(off){
+  if(backendOffline === off) return;
+  backendOffline = off;
+  renderOfflineBanner();
+}
+
+function renderOfflineBanner(){
+  const el = document.getElementById('offlineBanner');
+  if(!el) return;
+  if(!backendOffline){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = `${ICONS.lock}<div><b>Can't reach the server.</b> <span>The bays below are examples, and signing in won't work until this clears. Try again in a few minutes.</span></div>`;
+  el.style.display = 'flex';
 }
 
 const RADIUS_OPTIONS = [0.5, 1, 2, 5];
@@ -1298,7 +1392,38 @@ function setRadius(r){
   if(state.screen === 'map') renderMap();
 }
 
+/* ---------------- first-month seeding notice ----------------
+   The app is a two-sided market: nobody borrows a bay until bays exist, and
+   nobody lends until borrowing is happening. For the first month the ask is
+   one-sided on purpose- put yours in, even before you need one- so this sits
+   above the feed rather than inside it, where an empty map would bury it.
+
+   Dismissible, and the dismissal is remembered. Nagging someone who has
+   already read it is how a message stops being read. */
+
+function renderSeedNotice(){
+  const el = document.getElementById('seedNotice');
+  if(!el) return;
+  if(state.seedNoticeDismissed){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="seed-notice">
+      <div class="seed-head">${ICONS.car}Help build the map</div>
+      <div class="seed-body">We encourage users to <b>make their bays available</b> to build availability in the app for the first month. By doing this it will help build our community and increase the amount of bays available in your chosen area.</div>
+      <div class="seed-actions">
+        <button class="btn btn-plus" style="padding:9px 14px; font-size:12px;" onclick="lendMyBay()">Lend my bay</button>
+        <button class="seed-dismiss" onclick="dismissSeedNotice()">Got it</button>
+      </div>
+    </div>`;
+}
+
+function dismissSeedNotice(){
+  state.seedNoticeDismissed = true;
+  saveState();
+  renderSeedNotice();
+}
+
 function renderHome(){
+  renderSeedNotice();
   // Cheap and idempotent, and it covers the case a saved origin is restored
   // from a previous visit: state comes back, but nothing has recomputed the
   // distances against it yet.
