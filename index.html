@@ -437,7 +437,7 @@
   .tc-box .tc-flag{ color:var(--curb); font-weight:600; }
   .tc-disclaimer{
     font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--paint-dim); background:var(--asphalt);
-    padding:9px 11px; border-radius:8px; margin-bottom:12px; line-height:1.5;
+    padding:9px 11px; border-radius:8px; margin:14px 0 0; line-height:1.5;
   }
   .tc-agree{ display:flex; align-items:flex-start; gap:10px; padding:14px 0 4px; }
   .tc-agree input{ width:18px; height:18px; margin-top:1px; accent-color:var(--curb); flex:0 0 auto; }
@@ -1158,8 +1158,6 @@ const ICONS = {
 };
 
 const TERMS_HTML = `
-  <div class="tc-disclaimer">Not legal advice, and not yet reviewed by a solicitor. Still outstanding: the payment terms in section 7, once Swap Plus actually takes money. Governed by the laws of England &amp; Wales. Last updated 15 October 2026.</div>
-
   <h4>1. Who you are contracting with</h4>
   <p>SwapSpot is run by John Kelechi, a sole trader, trading as SwapSpot.</p>
   <p>Address: 324 High Road, London, N15 4BN.<br>Email: swapspot.uk@gmail.com.</p>
@@ -1225,6 +1223,8 @@ const TERMS_HTML = `
 
   <h4>17. Governing law</h4>
   <p>These terms are governed by the laws of England and Wales, and the English and Welsh courts have non-exclusive jurisdiction- if you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.</p>
+
+  <div class="tc-disclaimer">Last updated 15 October 2026.</div>
 `;
 
 // lat/lng are real approximate coordinates for these Shoreditch streets, so
