@@ -105,6 +105,32 @@ against forgetting, not against deciding.
 Adding a line to the allowlist is a decision, not a formality: it says that
 expression can never hold text a member typed. Read the diff.
 
+## Backups
+
+The schema is in version control- `supabase/migrations` rebuilds the whole
+structure on a fresh project. The data is not, and cannot be: it is members'
+email addresses, bays, swap history and credit balances, and this repository
+is public.
+
+`tools/backup-data.ps1` dumps the data to a dated file outside the repo:
+
+```
+powershell -ExecutionPolicy Bypass -File toolsackup-data.ps1
+```
+
+It asks for the database password (Supabase dashboard → Settings → Database,
+not the publishable key), writes to `%USERPROFILE%\SwapSpot-backups`, keeps
+the last 14 and prunes the rest. It refuses to write inside the repository.
+
+Deliberately not a GitHub Action: workflow artifacts on a public repo are
+downloadable by anyone, so automating this into CI would publish the exact
+data it exists to protect. Deliberately not committed either- git never
+forgets, and the terms promise members they can ask to be erased.
+
+Run it before anything risky, and on a rhythm once real members have real
+credit balances. Free-tier Supabase gives you no downloadable backups of
+your own.
+
 ## What's real, and what isn't yet
 
 Real and working:
