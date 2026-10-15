@@ -114,8 +114,8 @@ create policy "users submit their own verification"
   with check (user_id = auth.uid());
 
 grant select, insert on verifications to authenticated;
--- No update grant: only a reviewer (service_role, i.e. Dan reviewing by hand
--- for now, or an admin tool later) can move status to approved/rejected.
+-- No update grant: only a reviewer (service_role, i.e. the operator reviewing
+-- by hand for now, or an admin tool later) can move status to approved/rejected.
 
 -- =========================================================================
 -- LISTINGS- a bay someone is lending out.

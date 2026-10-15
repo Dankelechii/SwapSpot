@@ -123,8 +123,8 @@ Deliberately not done yet:
   the code- and the instant-book path it would unlock never triggers today.
 - **Verification is approved by hand.** You can upload a bay photo and see
   "Pending review", but nothing in the schema lets a client mark itself
-  verified. Dan flips `profiles.verification_status` in the Supabase Table
-  Editor after looking at the upload. **Only verified owners can list a bay**,
+  verified. The operator flips `profiles.verification_status` in the Supabase
+  Table Editor after looking at the upload. **Only verified owners can list a bay**,
   so a tester who wants to test *listing* (rather than just browsing and
   requesting) needs approving first. This was a deliberate call over building
   a fake self-approval flow.

@@ -56,13 +56,13 @@ grant on `profiles` only covers `display_name` and `avatar_url`- and the
 bay", so the app doesn't insert into it. That means:
 
 - A new member can upload a photo and see "Pending review" in the app.
-- Nobody actually gets verified until **Dan flips `profiles.verification_status`
-  to `'verified'` by hand**, in the Table Editor, after looking at what they
-  uploaded (Storage → `bay-photos` → their user-id folder).
+- Nobody actually gets verified until **the operator flips
+  `profiles.verification_status` to `'verified'` by hand**, in the Table Editor,
+  after looking at what they uploaded (Storage → `bay-photos` → their user-id folder).
 - Only a verified owner can list a bay- `enforce_verified_listing_owner()`
   (the trigger below) rejects the insert otherwise. So a brand-new tester who
-  wants to test *listing* a bay (not just browsing/requesting one) needs Dan
-  to approve them first.
+  wants to test *listing* a bay (not just browsing/requesting one) needs
+  approving first.
 
 This was a deliberate call over building a fake self-approval flow that would
 misrepresent what "verified" means once real people are using it. A proper
@@ -124,8 +124,9 @@ two apps' data and auth users never mix). The project's URL and publishable
 key are hardcoded in `index.html`- they're safe to expose client-side by
 design (that's what RLS + these RPCs are for).
 
-A demo-owner account (`swapspot.demo.owner@gmail.com`, created via the Auth
-REST API- not one of Dan's personal accounts) owns the six seeded bays that
+A dedicated demo-owner account (created via the Auth REST API, separate from
+any personal account- its address is in the project's Auth table, not here)
+owns the six seeded bays that
 show up in the feed on first load, so the app never looks empty for a new
 tester. It was marked `verified` by hand the same way any real member would
 be.
